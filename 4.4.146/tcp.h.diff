@@ -1,0 +1,13 @@
+diff --git a/include/net/tcp.h b/include/net/tcp.h
+index b0210270b406..7de25c84102a 100644
+--- a/include/net/tcp.h
++++ b/include/net/tcp.h
+@@ -391,7 +391,7 @@ extern int tcp_use_userconfig_sysctl_handler(struct ctl_table *, int,
+ extern int tcp_proc_delayed_ack_control(struct ctl_table *, int,
+ 				void __user *, size_t *, loff_t *);
+ 
+-void tcp_enter_quickack_mode(struct sock *sk);
++void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks);
+ static inline void tcp_dec_quickack_mode(struct sock *sk,
+ 					 const unsigned int pkts)
+ {
