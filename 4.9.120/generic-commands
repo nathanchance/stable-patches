@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+header "Resetting all conflicts"
+git cf
+echo
+git ra
+
+header "Applying all patches"
+git fp -1 --stdout 4cd13c21b207e80ddb1144c576500098f2d5f882 | git ap
+git fp -1 --stdout 3c53776e29f81719efcf8f7a6e30cdf753bee94d | git ap
+git ap "${PATCHES_FOLDER}"/*.diff
+
+header "Committing merge"
+git fm

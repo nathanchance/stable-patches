@@ -1,0 +1,13 @@
+diff --git a/kernel/smp.c b/kernel/smp.c
+index 313d9a819cc4..d49e5df9c77a 100644
+--- a/kernel/smp.c
++++ b/kernel/smp.c
+@@ -597,6 +597,8 @@ void __init smp_init(void)
+ 
+ 	free_boot_cpu_mask();
+ 
++	/* Final decision about SMT support */
++	cpu_smt_check_topology();
+ 	/* Any cleanup work */
+ 	smp_announce();
+ 	smp_cpus_done(setup_max_cpus);
