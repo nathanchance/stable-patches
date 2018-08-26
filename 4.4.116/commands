@@ -1,2 +1,18 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+header "Applying all patches"
 git ch v4.4.116 -- drivers/media/v4l2-core/v4l2-compat-ioctl32.c
-git ap ${HOME}/repos/stable-patches/4.4.116/v4l2-compat-ioctl32.c.diff
+git ap "${PATCHES_FOLDER}"/v4l2-compat-ioctl32.c.diff
+
+header "Committing merge"
+git fm

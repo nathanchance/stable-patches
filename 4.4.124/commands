@@ -1,3 +1,23 @@
-git ap ${HOME}/repos/stable-patches/4.4.124/regd.c.diff
+#!/usr/bin/env bash
 
-git ap ${HOME}/repos/stable-patches/4.4.124/msm_gem.c.diff
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+header "Resetting all conflicts"
+git cf
+echo
+git ra
+
+header "Applying all patches"
+git ap "${PATCHES_FOLDER}"/regd.c.diff
+git ap "${PATCHES_FOLDER}"/msm_gem.c.diff
+
+header "Committing merge"
+git fm
