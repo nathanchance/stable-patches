@@ -16,5 +16,9 @@ echo
 git rm fs/squashfs/file_cache.c
 git ra
 
+header "Applying all patches"
+git fp -1 --stdout 91d8631417bdfbee010fd0be4b19dee7cecaeb43 | git ap -R
+git fp -1 --stdout 5ad356eabc47d26a92140a0c4b20eba471c10de3 | git ap
+
 header "Committing merge"
 git fm
