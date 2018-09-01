@@ -16,8 +16,10 @@ echo
 git ra
 
 header "Applying all patches"
-git fp -1 --stdout 408a31cb69f01eaa25b38d68e1b854eadab9df00 | git ap -R
-git ap "${PATCHES_FOLDER}"/arm64-mm-check-for-upper-page_shift-bits-in-pfn_valid.patch
+git fp -1 --stdout 1c4a6945fde71d5a426ea8adab895643ff848c3f | git ap -R
+git fp -1 --stdout c6a9c8e51b188d049496643db2cfbb67df65190c | git ap -R
+git fp -1 --stdout 68709f45385aeddb0ca96a060c0c8259944f321b | git ap
+git fp -1 --stdout 5ad356eabc47d26a92140a0c4b20eba471c10de3 | git ap
 
 header "Committing merge"
 git fm
