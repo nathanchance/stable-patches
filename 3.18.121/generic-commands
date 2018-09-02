@@ -18,13 +18,14 @@ git ra
 header "Applying all patches"
 git fp -1 --stdout 408a31cb69f01eaa25b38d68e1b854eadab9df00 | git ap -R
 git ap "${PATCHES_FOLDER}"/arm64-mm-check-for-upper-page_shift-bits-in-pfn_valid.patch
+[[ -z $(git status --porcelain drivers/staging/android/ion/ion.c) ]] && curl https://lore.kernel.org/lkml/20180831202738.78559-1-ghackmann@google.com/raw | git ap
 
 header "Committing merge"
 git fm
 
 header "Applying additional commits"
-rm *.patch
+rm -f *.patch
 cp "${PATCHES_FOLDER}"/000*.patch .
-sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "${1}" drivers/staging/android/ion/ion.c)/g" 0002*.patch
+sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
 git am *.patch
-rm *.patch
+rm -f *.patch

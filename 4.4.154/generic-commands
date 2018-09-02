@@ -20,13 +20,19 @@ git fp -1 --stdout 1c4a6945fde71d5a426ea8adab895643ff848c3f | git ap -R
 git fp -1 --stdout c6a9c8e51b188d049496643db2cfbb67df65190c | git ap -R
 git fp -1 --stdout 68709f45385aeddb0ca96a060c0c8259944f321b | git ap
 git fp -1 --stdout 5ad356eabc47d26a92140a0c4b20eba471c10de3 | git ap
+[[ -z $(git status --porcelain drivers/staging/android/ion/ion.c) ]] && curl https://lore.kernel.org/lkml/20180831202738.78559-1-ghackmann@google.com/raw | git ap
+if [[ "$(pwd)" =~ flash ]]; then
+    for SHA in 87114373ea50 45ff350bbd9d b8f95e5d13f5 a2477b0e67c5; do
+        git fp -1 --stdout ${SHA} | git ap --include fs/fuse/dev.c
+    done
+fi
 
 header "Committing merge"
 git fm
 
 header "Applying additional commits"
-rm *.patch
+rm -f *.patch
 cp "${PATCHES_FOLDER}"/000*.patch .
-sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "${1}" drivers/staging/android/ion/ion.c)/g" 0002*.patch
+sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
 git am *.patch
-rm *.patch
+rm -f *.patch
