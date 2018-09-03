@@ -1,4 +1,4 @@
-From 04ecf33b0db0a32fc4676b63aab530f112838926 Mon Sep 17 00:00:00 2001
+From e645787609a1cf5e5dcb31e42b78c4fe00672790 Mon Sep 17 00:00:00 2001
 From: Nathan Chancellor <natechancellor@gmail.com>
 Date: Fri, 31 Aug 2018 19:15:38 -0700
 Subject: [PATCH 2/2] staging: ion: msm: Apply insert-commit-id-here to
@@ -12,26 +12,28 @@ the ioctl does not suffer from the issue outlined by Greg Hackmann).
 
 Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
 ---
- drivers/staging/android/ion/ion.c         | 2 +-
+ drivers/staging/android/ion/ion.c         | 4 ++--
  drivers/staging/android/ion/ion_priv.h    | 4 ++--
  drivers/staging/android/ion/msm/msm_ion.c | 5 ++++-
- 3 files changed, 7 insertions(+), 4 deletions(-)
+ 3 files changed, 8 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
-index 18187d8a58ca..d0479bf28791 100644
+index 18187d8a58ca..ff3ebfc71215 100644
 --- a/drivers/staging/android/ion/ion.c
 +++ b/drivers/staging/android/ion/ion.c
-@@ -420,7 +420,7 @@ static struct ion_handle *ion_handle_lookup(struct ion_client *client,
+@@ -420,8 +420,8 @@ static struct ion_handle *ion_handle_lookup(struct ion_client *client,
  	return ERR_PTR(-EINVAL);
  }
  
 -static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
+-						int id)
 +struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
- 						int id)
++					       int id)
  {
  	struct ion_handle *handle;
+ 
 diff --git a/drivers/staging/android/ion/ion_priv.h b/drivers/staging/android/ion/ion_priv.h
-index c466df94c874..90092e4fe242 100644
+index c466df94c874..c97fde71936d 100644
 --- a/drivers/staging/android/ion/ion_priv.h
 +++ b/drivers/staging/android/ion/ion_priv.h
 @@ -581,8 +581,8 @@ int ion_walk_heaps(struct ion_client *client, int heap_id,
@@ -41,7 +43,7 @@ index c466df94c874..90092e4fe242 100644
 -struct ion_handle *ion_handle_get_by_id(struct ion_client *client,
 -					int id);
 +struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
-+						int id);
++					       int id);
  
  int ion_handle_put(struct ion_handle *handle);
  
