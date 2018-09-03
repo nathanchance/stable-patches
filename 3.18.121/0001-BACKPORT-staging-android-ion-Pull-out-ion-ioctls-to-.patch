@@ -1,4 +1,4 @@
-From 8bde22eca183143de0f90c8924a757376cab4aea Mon Sep 17 00:00:00 2001
+From 6d453d0a87511ccbe51d7f5a0012dbddbc5f0093 Mon Sep 17 00:00:00 2001
 From: Laura Abbott <labbott@redhat.com>
 Date: Wed, 7 Sep 2016 11:49:58 -0700
 Subject: [PATCH 1/2] BACKPORT: staging: android: ion: Pull out ion ioctls to a
@@ -21,7 +21,7 @@ Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
  2 files changed, 76 insertions(+), 75 deletions(-)
 
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
-index b1efd7c6347a..211327d53dff 100755
+index c0ea623ceda3..8013107b186e 100644
 --- a/drivers/staging/android/ion/ion.c
 +++ b/drivers/staging/android/ion/ion.c
 @@ -47,81 +47,6 @@
@@ -107,7 +107,7 @@ index b1efd7c6347a..211327d53dff 100755
  
  bool ion_buffer_fault_user_mappings(struct ion_buffer *buffer)
 diff --git a/drivers/staging/android/ion/ion_priv.h b/drivers/staging/android/ion/ion_priv.h
-index 1a8927572d94..a4faec306404 100644
+index 1313f838ba38..0b273be922ab 100644
 --- a/drivers/staging/android/ion/ion_priv.h
 +++ b/drivers/staging/android/ion/ion_priv.h
 @@ -34,6 +34,7 @@

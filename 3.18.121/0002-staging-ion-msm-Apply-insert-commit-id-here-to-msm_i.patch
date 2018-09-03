@@ -1,4 +1,4 @@
-From 1b0e9c7620bee8344f5490b683f20eeeebaeacc1 Mon Sep 17 00:00:00 2001
+From a510281243cb380e9cdd6bcca5226f9468eee47b Mon Sep 17 00:00:00 2001
 From: Nathan Chancellor <natechancellor@gmail.com>
 Date: Fri, 31 Aug 2018 19:15:38 -0700
 Subject: [PATCH 2/2] staging: ion: msm: Apply insert-commit-id-here to
@@ -11,44 +11,46 @@ this same definition and scheme.
 
 Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
 ---
- drivers/staging/android/ion/ion.c         | 2 +-
+ drivers/staging/android/ion/ion.c         | 4 ++--
  drivers/staging/android/ion/ion_priv.h    | 4 ++--
  drivers/staging/android/ion/msm/msm_ion.c | 5 ++++-
- 3 files changed, 7 insertions(+), 4 deletions(-)
+ 3 files changed, 8 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
-index 211327d53dff..eeac99d0d8ea 100755
+index 8013107b186e..eb5cba989e19 100644
 --- a/drivers/staging/android/ion/ion.c
 +++ b/drivers/staging/android/ion/ion.c
-@@ -424,7 +424,7 @@ static struct ion_handle *ion_handle_lookup(struct ion_client *client,
+@@ -420,8 +420,8 @@ static struct ion_handle *ion_handle_lookup(struct ion_client *client,
  	return ERR_PTR(-EINVAL);
  }
  
 -static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
+-						int id)
 +struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
- 						int id)
++					       int id)
  {
  	struct ion_handle *handle;
+ 
 diff --git a/drivers/staging/android/ion/ion_priv.h b/drivers/staging/android/ion/ion_priv.h
-index a4faec306404..edc67582395c 100644
+index 0b273be922ab..73af01fca13a 100644
 --- a/drivers/staging/android/ion/ion_priv.h
 +++ b/drivers/staging/android/ion/ion_priv.h
 @@ -579,8 +579,8 @@ int ion_walk_heaps(struct ion_client *client, int heap_id,
- 			unsigned int type, void *data,
+ 			enum ion_heap_type type, void *data,
  			int (*f)(struct ion_heap *heap, void *data));
  
 -struct ion_handle *ion_handle_get_by_id(struct ion_client *client,
 -					int id);
 +struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
-+						int id);
++					       int id);
  
  int ion_handle_put(struct ion_handle *handle);
  
 diff --git a/drivers/staging/android/ion/msm/msm_ion.c b/drivers/staging/android/ion/msm/msm_ion.c
-index b339f893b5a8..31a7be47a25c 100644
+index e112a4fe6682..dfd4c3d65802 100644
 --- a/drivers/staging/android/ion/msm/msm_ion.c
 +++ b/drivers/staging/android/ion/msm/msm_ion.c
-@@ -696,13 +696,16 @@ long msm_ion_custom_ioctl(struct ion_client *client,
+@@ -695,13 +695,16 @@ long msm_ion_custom_ioctl(struct ion_client *client,
  		struct mm_struct *mm = current->active_mm;
  
  		if (data.flush_data.handle > 0) {
