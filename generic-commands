@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
 
 function header() {
     echo -e "\033[01;31m"
