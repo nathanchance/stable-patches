@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
 
 function header() {
     echo -e "\033[01;31m"
@@ -15,31 +16,33 @@ git cf
 echo
 git rm drivers/staging/android/ion/ion-ioctl.c
 git rm fs/squashfs/file_cache.c
-git ra
+git rf "arch/arm64/mm/init.c drivers/staging/android/ion/ion.c drivers/staging/android/ion/ion_priv.h fs/squashfs/file.c fs/squashfs/file_direct.c fs/squashfs/squashfs.h"
+[[ -n ${FLASH} && "$(basename "${PWD}")" = "op6" ]] && git rf "fs/fuse/dev.c"
 
 header "Applying all patches"
-git fp -1 --stdout 91d8631417bdfbee010fd0be4b19dee7cecaeb43 | git ap -R
-git fp -1 --stdout 5ad356eabc47d26a92140a0c4b20eba471c10de3 | git ap
-[[ "$(pwd)" =~ flash ]] && FLASH=true
-[[ -n ${FlASH} ]] && git fp -1 --stdout a2477b0e67c52f4364a47c3ad70902bc2a61bd4c | git ap
-git ap "${PATCHES_FOLDER}"/*.diff
-if [[ -n ${FLASH} ]]; then
+git fp -1 --stdout 91d8631417bdfbee010fd0be4b19dee7cecaeb43 | git ap -R || exit 1
+git fp -1 --stdout 5ad356eabc47d26a92140a0c4b20eba471c10de3 | git ap || exit 1
+if [[ -n ${FlASH} ]]; then
+    git fp -1 --stdout a2477b0e67c52f4364a47c3ad70902bc2a61bd4c | git ap || exit 1
+fi
+git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+if [[ -n ${FLASH} && "$(basename "${PWD}")" = "op6" ]]; then
     for SHA in 87114373ea50 45ff350bbd9d b8f95e5d13f5 a2477b0e67c5; do
-        git fp -1 --stdout ${SHA} | git ap --include fs/fuse/dev.c
+        git fp -1 --stdout ${SHA} | git ap --include fs/fuse/dev.c || exit 1
     done
 fi
 
 header "Committing merge"
-git fm
+git fm || exit 1
 
 header "Applying additional commits"
 rm -f *.patch
 cp "${PATCHES_FOLDER}"/000*.patch .
 sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
-git am 0001*.patch
-git am ${FLASH:+--exclude drivers/staging/android/ion/ion_priv.h} 0002*.patch
+git am 0001*.patch || exit 1
+git am ${FLASH:+--exclude drivers/staging/android/ion/ion_priv.h} 0002*.patch || exit 1
 rm -f *.patch
 if [[ -n ${FLASH} ]]; then
-    git ap "${PATCHES_FOLDER}"/flash/*.diff
-    git cad --no-edit
+    git ap "${PATCHES_FOLDER}"/flash/*.diff || exit 1
+    git ca --no-edit || exit 1
 fi

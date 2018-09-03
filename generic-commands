@@ -16,7 +16,7 @@ echo
 git ra
 
 header "Applying all patches"
-git ap "${PATCHES_FOLDER}"/*.diff
+git ap "${PATCHES_FOLDER}"/*.diff || exit 1
 
 header "Committing merge"
-git fm
+git fm || exit
