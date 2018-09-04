@@ -1,8 +1,18 @@
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
-index fe536d0371c5..dd4eee124e70 100644
+index fe536d0371c5..fc0c8124730a 100644
 --- a/drivers/staging/android/ion/ion.c
 +++ b/drivers/staging/android/ion/ion.c
-@@ -510,18 +510,6 @@ static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
+@@ -407,7 +407,8 @@ static void ion_handle_get(struct ion_handle *handle)
+ }
+ 
+ /* Must hold the client lock */
+-static struct ion_handle* ion_handle_get_check_overflow(struct ion_handle *handle)
++static struct ion_handle *ion_handle_get_check_overflow(
++					struct ion_handle *handle)
+ {
+ 	if (atomic_read(&handle->ref.refcount) + 1 == 0)
+ 		return ERR_PTR(-EOVERFLOW);
+@@ -510,18 +511,6 @@ static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
  	return ERR_PTR(-EINVAL);
  }
  
@@ -21,7 +31,7 @@ index fe536d0371c5..dd4eee124e70 100644
  static bool ion_handle_validate(struct ion_client *client,
  				struct ion_handle *handle)
  {
-@@ -1400,24 +1388,28 @@ static struct dma_buf_ops dma_buf_ops = {
+@@ -1400,24 +1389,28 @@ static struct dma_buf_ops dma_buf_ops = {
  	.kunmap = ion_dma_buf_kunmap,
  };
  
@@ -55,7 +65,7 @@ index fe536d0371c5..dd4eee124e70 100644
  
  	exp_info.ops = &dma_buf_ops;
  	exp_info.size = buffer->size;
-@@ -1432,14 +1424,21 @@ struct dma_buf *ion_share_dma_buf(struct ion_client *client,
+@@ -1432,14 +1425,21 @@ struct dma_buf *ion_share_dma_buf(struct ion_client *client,
  
  	return dmabuf;
  }
@@ -79,7 +89,7 @@ index fe536d0371c5..dd4eee124e70 100644
  	if (IS_ERR(dmabuf))
  		return PTR_ERR(dmabuf);
  
-@@ -1448,8 +1447,19 @@ int ion_share_dma_buf_fd(struct ion_client *client, struct ion_handle *handle)
+@@ -1448,8 +1448,19 @@ int ion_share_dma_buf_fd(struct ion_client *client, struct ion_handle *handle)
  		dma_buf_put(dmabuf);
  	return fd;
  }
@@ -99,7 +109,7 @@ index fe536d0371c5..dd4eee124e70 100644
  struct ion_handle *ion_import_dma_buf(struct ion_client *client,
  				      struct dma_buf *dmabuf)
  {
-@@ -1612,11 +1622,15 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+@@ -1612,11 +1623,15 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  	{
  		struct ion_handle *handle;
  
