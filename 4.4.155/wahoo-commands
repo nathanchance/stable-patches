@@ -11,23 +11,25 @@ function header() {
     echo -e "\033[0m"
 }
 
-header "Resetting all conflicts"
-git cf
-echo
-if [[ "$(git cf)" =~ ion.c ]]; then
-    APPLY_ION=true
-    git rf "drivers/staging/android/ion/ion.c"
-fi
+#header "Resetting all conflicts"
+#git cf
+#echo
+#git ra
 
-header "Applying all patches"
-[[ -n ${APPLY_ION} ]] && git ap "${PATCHES_FOLDER}"/generic/ion.c.diff
+#header "Applying all patches"
+#git ap "${PATCHES_FOLDER}"/*.diff
 
-header "Committing merge"
-git fm || exit 1
+#header "Committing merge"
+#git fm || exit 1
 
 header "Applying additional commits"
 rm -f *.patch
-cp "${PATCHES_FOLDER}"/generic/000*.patch .
+cp "${PATCHES_FOLDER}"/wahoo/000*.patch .
 sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
-git am *.patch || exit 1
+git am 0001*.patch || exit 1
+git am ${FLASH:+--exclude drivers/staging/android/ion/ion_priv.h} 0002*.patch || exit 1
 rm -f *.patch
+if [[ -n ${FLASH} ]]; then
+    git ap "${PATCHES_FOLDER}"/wahoo/flash/*.diff || exit 1
+    git ca --no-edit || exit 1
+fi

@@ -1,4 +1,4 @@
-From e645787609a1cf5e5dcb31e42b78c4fe00672790 Mon Sep 17 00:00:00 2001
+From c5a9afc696420faf9fada0b592197536cc5369b6 Mon Sep 17 00:00:00 2001
 From: Nathan Chancellor <natechancellor@gmail.com>
 Date: Fri, 31 Aug 2018 19:15:38 -0700
 Subject: [PATCH 2/2] staging: ion: msm: Apply insert-commit-id-here to
@@ -18,7 +18,7 @@ Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
  3 files changed, 8 insertions(+), 5 deletions(-)
 
 diff --git a/drivers/staging/android/ion/ion.c b/drivers/staging/android/ion/ion.c
-index 18187d8a58ca..ff3ebfc71215 100644
+index 7f0d8df3eaf1..74049a0a481a 100644
 --- a/drivers/staging/android/ion/ion.c
 +++ b/drivers/staging/android/ion/ion.c
 @@ -420,8 +420,8 @@ static struct ion_handle *ion_handle_lookup(struct ion_client *client,
@@ -33,11 +33,11 @@ index 18187d8a58ca..ff3ebfc71215 100644
  	struct ion_handle *handle;
  
 diff --git a/drivers/staging/android/ion/ion_priv.h b/drivers/staging/android/ion/ion_priv.h
-index c466df94c874..c97fde71936d 100644
+index 82ff2b84823c..5cb56675c189 100644
 --- a/drivers/staging/android/ion/ion_priv.h
 +++ b/drivers/staging/android/ion/ion_priv.h
 @@ -581,8 +581,8 @@ int ion_walk_heaps(struct ion_client *client, int heap_id,
- 			unsigned int type, void *data,
+ 			enum ion_heap_type type, void *data,
  			int (*f)(struct ion_heap *heap, void *data));
  
 -struct ion_handle *ion_handle_get_by_id(struct ion_client *client,
@@ -48,10 +48,10 @@ index c466df94c874..c97fde71936d 100644
  int ion_handle_put(struct ion_handle *handle);
  
 diff --git a/drivers/staging/android/ion/msm/msm_ion.c b/drivers/staging/android/ion/msm/msm_ion.c
-index 518f660c24e1..05ebc2217a8c 100644
+index 46262869ac20..69562b466a72 100644
 --- a/drivers/staging/android/ion/msm/msm_ion.c
 +++ b/drivers/staging/android/ion/msm/msm_ion.c
-@@ -725,13 +725,16 @@ long msm_ion_custom_ioctl(struct ion_client *client,
+@@ -724,13 +724,16 @@ long msm_ion_custom_ioctl(struct ion_client *client,
  		struct mm_struct *mm = current->active_mm;
  
  		if (data.flush_data.handle > 0) {
