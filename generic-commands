@@ -11,13 +11,37 @@ function header() {
     echo -e "\033[0m"
 }
 
-header "Resetting all conflicts"
-git cf
-echo
-git ra
+APPROVED_CONFLICTS=()
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=${APPROVED_CONFLICT##*:}
+            APPROVED_CONFLICT=${APPROVED_CONFLICT%%:*}
+            [[ ${ACTION} = ${APPROVED_CONFLICT} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) echo "Invalid action: ${ACTION}"; exit 1 ;;
+            esac
 
-header "Applying all patches"
-git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            echo "${CONFLICT} not accounted for, bailing out!"
+            exit 1
+        fi
+    done
+    [[ -n "$(git cf)" ]] && { echo -n "\nResetting conflicts failed!"; exit 1; }
 
-header "Committing merge"
-git fm || exit
+    header "Applying all patches"
+    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+
+    header "Committing merge"
+    git fm || exit 1
+fi
