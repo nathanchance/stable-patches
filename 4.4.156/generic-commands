@@ -40,7 +40,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && { echo -n "\nResetting conflicts failed!"; exit 1; }
 
     header "Applying all patches"
-    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    git ap "${PATCHES_FOLDER}"/generic/*.diff || exit 1
 
     header "Committing merge"
     git fm || exit 1
