@@ -11,7 +11,7 @@ function header() {
     echo -e "\033[0m"
 }
 
-APPROVED_CONFLICTS=()
+APPROVED_CONFLICTS=( "drivers/staging/android/ion/ion.c" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
