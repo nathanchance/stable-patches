@@ -13,7 +13,7 @@ function header() {
 
 APPROVED_CONFLICTS=( "block/blk-cgroup.c"
                      "kernel/locking/rwsem-xadd.c" )
-[[ $(git cb) =~ r34 || $(git cb) =~ r35 ]] && APPROVE_CONFLICTS+=( "kernel/fork.c" )
+[[ $(git cb) =~ r34 || $(git cb) =~ r35 ]] && APPROVED_CONFLICTS+=( "kernel/fork.c" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
