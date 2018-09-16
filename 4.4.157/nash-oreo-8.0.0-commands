@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+APPROVED_CONFLICTS=( "kernel/locking/osq_lock.c"
+                     "kernel/locking/rwsem-xadd.c" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=${APPROVED_CONFLICT##*:}
+            APPROVED_CONFLICT=${APPROVED_CONFLICT%%:*}
+            [[ ${ACTION} = ${APPROVED_CONFLICT} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) echo "Invalid action: ${ACTION}"; exit 1 ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            echo "${CONFLICT} not accounted for, bailing out!"
+            exit 1
+        fi
+    done
+    [[ -n "$(git cf)" ]] && { echo -n "\nResetting conflicts failed!"; exit 1; }
+
+    header "Applying all patches"
+    echo "Checking out kernel/locking/osq_lock.c..."
+    git ch MERGE_HEAD -- kernel/locking/osq_lock.c
+    # Re-apply out of tree patch
+    git fp -1 --stdout 6933043199fe89f4fc9150df58039b3ee05942fb | git ap
+    echo "Checking out kernel/locking/rwsem-xadd.c..."
+    git ch MERGE_HEAD -- kernel/locking/rwsem-xadd.c
+
+    header "Committing merge"
+    git fm || exit 1
+fi
