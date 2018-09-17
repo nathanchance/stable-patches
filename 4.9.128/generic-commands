@@ -19,6 +19,7 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "block/blk-cgroup.c:1"
+                     "include/linux/mm_types.h:1"
                      "mm/vmscan.c:2"
                      "security/selinux/avc.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
@@ -48,6 +49,9 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         fi
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
 
     header "Committing merge"
     git fm || exit 1
