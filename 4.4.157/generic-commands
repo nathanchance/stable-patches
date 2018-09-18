@@ -19,6 +19,8 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "block/blk-cgroup.c:1"
+                     "drivers/net/wireless/ath/ath10k/wmi-tlv.c:1"
+                     "kernel/fork.c:1"
                      "kernel/locking/rwsem-xadd.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
