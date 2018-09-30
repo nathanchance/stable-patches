@@ -11,17 +11,6 @@ function header() {
     echo -e "\033[0m"
 }
 
-header "Resetting all conflicts"
-git cf
-echo
-git ra
-
-header "Applying all patches"
-git ap "${PATCHES_FOLDER}"/*.diff
-
-header "Committing merge"
-git fm || exit 1
-
 header "Applying additional commits"
 rm -f *.patch
 cp "${PATCHES_FOLDER}"/000*.patch .

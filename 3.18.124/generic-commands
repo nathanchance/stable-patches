@@ -54,3 +54,10 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Committing merge"
     git fm || exit 1
 fi
+
+header "Applying additional commits"
+rm -f *.patch
+cp "${PATCHES_FOLDER}"/000*.patch .
+sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
+git am *.patch || exit 1
+rm -f *.patch
