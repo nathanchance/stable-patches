@@ -18,7 +18,9 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "drivers/hid/hid-core.c:2" )
+APPROVED_CONFLICTS=( "drivers/hid/hid-core.c:2"
+                     "drivers/usb/core/devio.c:2"
+                     "drivers/usb/core/driver.c:2" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -49,7 +51,22 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
 
     header "Applying all patches"
     git ch MERGE_HEAD drivers/hid/hid-core.c || exit 1
+    # 09796331234d ("Bluetooth: HID: Add Bus type for specific HID Keyboard") 
     git fp -1 --stdout 09796331234ddbed92a023d0d4c44ad3e9062209 | git ap --include drivers/hid/hid-core.c || exit 1
+    git ch MERGE_HEAD drivers/usb/core/driver.c || exit 1
+    # dc0c1b6e7588 ("USB: leave LPM alone if possible when binding/unbinding interface drivers")
+    git fp -1 --stdout dc0c1b6e75882998d048a19498b1a219a453531c | git ap --include include/linux/usb.h || exit 1
+    # 1a39dd098f52 ("usb: hub: Do not attempt to autosuspend disconnected devices")
+    git fp -1 --stdout 1a39dd098f52f430513b6e59032c0971799c15e7 | git ap --include drivers/usb/core/hub.c || exit 1
+    # 97c4279bfcc2 ("USB: Allow skipping device resume during system resume")
+    git fp -1 --stdout 97c4279bfcc2a622890f7a1596e4712f610d3b7a | git ap --include drivers/usb/core/driver.c || exit 1
+    if [[ $(git cb) =~ r34 ]]; then
+        git ch MERGE_HEAD drivers/usb/core/devio.c || exit 1
+        # 8a9a66e499d3 ("USB: usbfs: fix potential infoleak in devio")
+        git fp -1 --stdout 8a9a66e499d341f607059cc596990bc45eecc291 | git ap --include drivers/usb/core/devio.c || exit 1
+        # 3e2003cccc9f ("USB: usbfs: allow URBs to be reaped after disconnection")
+        git fp -1 --stdout 3e2003cccc9fb5f73a0d251dbb595f4c6e3a08bd | git ap --include include/uapi/linux/usbdevice_fs.h || exit 1
+    fi
 
     header "Committing merge"
     git fm || exit 1

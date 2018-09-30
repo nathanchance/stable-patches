@@ -15,6 +15,7 @@ header "Applying additional commits"
 rm -f *.patch
 cp "${PATCHES_FOLDER}"/000*.patch .
 sed -i "s/insert-commit-id-here/$(git log --format=%h -1 "$(git show -s --format=%P | awk '{print $2}')" drivers/staging/android/ion/ion.c)/g" 0002*.patch
+git am 0001*.patch
 git am ${FLASH:+--exclude drivers/staging/android/ion/ion_priv.h} 0002*.patch || exit 1
 rm -f *.patch
 if [[ -n ${FLASH} ]]; then
