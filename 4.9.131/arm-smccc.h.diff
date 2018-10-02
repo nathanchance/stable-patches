@@ -1,0 +1,20 @@
+diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
+index ca1d2cc2cdfa..7cb56b56188d 100644
+--- a/include/linux/arm-smccc.h
++++ b/include/linux/arm-smccc.h
+@@ -160,6 +160,7 @@ asmlinkage void __arm_smccc_hvc(unsigned long a0, unsigned long a1,
+ 
+ #define SMCCC_SMC_INST	"smc	#0"
+ #define SMCCC_HVC_INST	"hvc	#0"
++#define SMCCC_REG(n)	asm("x" # n)
+ 
+ #elif defined(CONFIG_ARM)
+ #include <asm/opcodes-sec.h>
+@@ -167,6 +168,7 @@ asmlinkage void __arm_smccc_hvc(unsigned long a0, unsigned long a1,
+ 
+ #define SMCCC_SMC_INST	__SMC(0)
+ #define SMCCC_HVC_INST	__HVC(0)
++#define SMCCC_REG(n)	asm("r" # n)
+ 
+ #endif
+ 
