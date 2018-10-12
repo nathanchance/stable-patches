@@ -19,8 +19,7 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "drivers/base/power/main.c:1"
-                     "fs/f2fs/checkpoint.c:1" 
-                     "kernel/sched/cputime.c:3" )
+                      "fs/f2fs/checkpoint.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -50,8 +49,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    [[ $(git cb) =~ r11 || $(git cb) =~ 9.0 ]] && { git fp -1 --stdout 914d085861c56585c3c2f9f1ce49bbb9547fb87f | git ap -R || exit 1; }
-    git ap "${PATCHES_FOLDER}"/{main.c.diff,cputime.c.diff} || exit 1
+    git ap "${PATCHES_FOLDER}"/main.c.diff || exit 1
     [[ ! ${PWD} =~ polaris ]] && { git ap "${PATCHES_FOLDER}"/checkpoint.c.diff || exit 1; }
 
     header "Committing merge"
