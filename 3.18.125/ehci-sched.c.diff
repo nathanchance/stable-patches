@@ -1,0 +1,19 @@
+diff --git a/drivers/usb/host/ehci-sched.c b/drivers/usb/host/ehci-sched.c
+index fc62964e659e..9e69e4567e6a 100644
+--- a/drivers/usb/host/ehci-sched.c
++++ b/drivers/usb/host/ehci-sched.c
+@@ -1604,11 +1604,11 @@ iso_stream_schedule (
+ 	 */
+ 	now2 = (now - base) & (mod - 1);
+ 
+-	/* Is the schedule already full? */
++	/* Is the schedule about to wrap around? */
+ 	if (unlikely(!empty && start < period)) {
+-		ehci_dbg(ehci, "iso sched full %pK (%u-%u < %u mod %u)\n",
++		ehci_dbg(ehci, "request %pK would overflow (%u-%u < %u mod %u)\n",
+ 				urb, stream->next_uframe, base, period, mod);
+-		status = -ENOSPC;
++		status = -EFBIG;
+ 		goto fail;
+ 	}
+ 
