@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=( "Makefile:9"
+                     "arch/arm/include/asm/cputype.h:1"
+                     "arch/x86/Makefile:5"
+                     "drivers/firmware/efi/libstub/Makefile:2"
+                     "drivers/xen/Makefile:1"
+                     "net/ipv6/route.c:1" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    case "$(basename "${PWD}"):$(git cb)" in
+        msm-4.9:*r7*|op6:lineage-15.1|polaris:*) BRANCH=r7 ;;
+        msm-4.9:*r11*|op6*) BRANCH=r11 ;;
+    esac
+    if [[ ${BRANCH} = "r11" ]]; then
+        # arch/arm64/crypto/sha{1,2}-ce-glue.c
+        git rf "arch/arm64/crypto/sha1-ce-glue.c arch/arm64/crypto/sha2-ce-glue.c"
+        # drivers/xen/Makefile
+        git fp -1 --stdout aadfde875ddcf324b38799297979e72f43f801c4 | git ap -R || exit 1
+        # Makefile
+        git fp -1 --stdout 8c97023cf0518f172b8cb7a9fffc28b89401abbf | git ap || exit 1
+        git fp -1 --stdout MERGE_HEAD | git ap || exit 1
+        # drivers/firmware/efi/libstub/Makefile
+        git ch MERGE_HEAD -- drivers/firmware/efi/libstub/Makefile
+        git fp -1 --stdout fe4b79904a24ae073871f21c62aa513a4347faaf | git ap || exit 1
+        git fp -1 --stdout 2451857f51d82c4130ab167a0831074d445ebaff | git ap || exit 1
+        # Stock OP6 source doesn't need any additional patches applied to it
+        [[ "${PWD}" =~ op6 && "$(git cb)" =~ SDM845 ]] && unset BRANCH
+    fi
+    # net/ipv6/route.c
+    curl -s https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=7ddacfa564870cdd97275fd87decb6174abc6380 | git ap || exit 1
+    [[ -n ${BRANCH} ]] && { git ap "${PATCHES_FOLDER}"/msm-4.9.${BRANCH}/*.diff || exit 1; }
+
+    header "Committing merge"
+    git fm || exit 1
+fi
