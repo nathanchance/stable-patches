@@ -1,0 +1,13 @@
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index ac2d7a64f083..6c2225c775aa 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -154,7 +154,7 @@ static void seq_print_vma_name(struct seq_file *m, struct vm_area_struct *vma)
+ 		struct page *page;
+ 
+ 		pages_pinned = get_user_pages(current, mm, page_start_vaddr,
+-				1, 0, 0, &page, NULL);
++				1, 0, &page, NULL);
+ 		if (pages_pinned < 1) {
+ 			seq_puts(m, "<fault>]");
+ 			return;
