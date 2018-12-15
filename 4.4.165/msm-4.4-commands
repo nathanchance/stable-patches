@@ -53,10 +53,12 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    case "$(git cb)" in
-        *r34*|*r35*|*9.0*) BRANCH=r34-r35 ;;
-        *) BRANCH=r27 ;;
-    esac
+    if [[ -z ${BRANCH} ]]; then
+        case "$(git cb)" in
+            *r34*|*r35*|*9.0*) BRANCH=r34-r35 ;;
+            *) BRANCH=r27 ;;
+        esac
+    fi
     git ap "${PATCHES_FOLDER}/${BRANCH}"/*.diff || exit 1
 
     header "Committing merge"
