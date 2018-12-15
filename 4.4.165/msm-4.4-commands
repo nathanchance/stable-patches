@@ -54,7 +54,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
 
     header "Applying all patches"
     case "$(git cb)" in
-        *r34*|*r35*) BRANCH=r34-r35 ;;
+        *r34*|*r35*|*9.0*) BRANCH=r34-r35 ;;
         *) BRANCH=r27 ;;
     esac
     git ap "${PATCHES_FOLDER}/${BRANCH}"/*.diff || exit 1
