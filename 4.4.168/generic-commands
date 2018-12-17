@@ -53,6 +53,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
 
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/{kgsl.c.diff,task_mmu.c.diff,uaccess_32.h.diff,uaccess_64.h.diff,uaccess.h.diff} || exit 1
+    [[ ${PWD} =~ nash ]] && { git ap "${PATCHES_FOLDER}"/mmu.c.diff || exit 1; }
     [[ ${PWD} =~ wahoo ]] && { git ap "${PATCHES_FOLDER}"/mnh-pcie.c.diff || exit 1; }
 
     header "Committing merge"
