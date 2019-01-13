@@ -55,7 +55,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     if [[ -z ${BRANCH} ]]; then
         case "$(git cb)" in
-            *r34*|*r35*|*9.0*) BRANCH=r34-r35 ;;
+            *r34*|*r35*|*9.0*|*16.0) BRANCH=r34-r35 ;;
             *) BRANCH=r27 ;;
         esac
     fi
