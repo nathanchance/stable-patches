@@ -61,6 +61,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         fi
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+    [[ ${PWD} =~ op5 ]] && git rf fs/f2fs/file.c
 
     if [[ ${PWD} =~ wahoo ]]; then
         header "Applying all patches"
