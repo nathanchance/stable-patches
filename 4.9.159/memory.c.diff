@@ -19,7 +19,7 @@ index 0e57734c1597..7157d2a162d2 100644
 +		ret = VM_FAULT_SIGBUS;
 +	else if (!(fe->flags & FAULT_FLAG_WRITE))
 +		ret = do_read_fault(fe, pgoff);
-+	else if (!(fe->vm_flags & VM_SHARED))
++	else if (!(fe->vma_flags & VM_SHARED))
 +		ret = do_cow_fault(fe, pgoff);
 +	else
 +		ret = do_shared_fault(fe, pgoff);
