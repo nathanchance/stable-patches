@@ -1,0 +1,12 @@
+diff --git a/kernel/cfi.c b/kernel/cfi.c
+index 6951c25d311b..f3576459b46b 100644
+--- a/kernel/cfi.c
++++ b/kernel/cfi.c
+@@ -220,7 +220,6 @@ static inline cfi_check_fn ptr_to_check_fn(const struct cfi_shadow __rcu *s,
+ 	unsigned long ptr)
+ {
+ 	int index;
+-	unsigned long check;
+ 
+ 	if (unlikely(!s))
+ 		return NULL; /* No shadow available */
