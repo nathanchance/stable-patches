@@ -8,7 +8,7 @@ index add1f8d379db..035535a6cc91 100644
  	if (params->buffer.fragment_size == 0 ||
 -	    params->buffer.fragments > U32_MAX / params->buffer.fragment_size)
 +	    params->buffer.fragments > U32_MAX / params->buffer.fragment_size ||
-+	    params->buffer.fragments == 0)d
++	    params->buffer.fragments == 0)
  		return -EINVAL;
  
  	/* now codec parameters */
