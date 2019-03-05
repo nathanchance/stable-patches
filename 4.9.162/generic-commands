@@ -18,16 +18,8 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "drivers/android/binder.c:1"
-                     "drivers/net/wireless/ath/wil6210/wmi.c:1"
-                     "fs/f2fs/checkpoint.c:6"
-                     "fs/f2fs/data.c:5"
-                     "fs/f2fs/f2fs.h:4"
-                     "fs/f2fs/inode.c:6"
-                     "fs/f2fs/node.c:5"
-                     "fs/f2fs/segment.c:5"
-                     "fs/f2fs/segment.h:6"
-                     "fs/f2fs/super.c:5" )
+APPROVED_CONFLICTS=( "drivers/gpu/drm/msm/msm_rd.c:1"
+                     "sound/core/compress_offload.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -57,14 +49,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    [[ "$(basename "${PWD}")" != "op6" && "$(git cb)" != "lineage-15.1" ]] && { git ap "${PATCHES_FOLDER}"/binder.c.diff || exit 1; }
-    case "$(basename "${PWD}"):$(git cb)" in
-        bluecross:*) PATCH_FILE=f2fs-bluecross.patch-series ;;
-        msm-4.9:*r7*) PATCH_FILE=f2fs-msm-4.9-r7.patch-series ;;
-        op6:lineage-15.1) PATCH_FILE=f2fs-op6-lineage-15.1.patch-series ;;
-        msm-4.9:*r11*|msm-4.9:*r12*|op6*) PATCH_FILE=f2fs-msm-4.9-r11.patch-series ;;
-    esac
-    [[ -n ${PATCH_FILE} ]] && { git rf fs/f2fs; git ap "${PATCHES_FOLDER}"/${PATCH_FILE} || exit 1; }
+    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
 
     header "Committing merge"
     git fm || exit 1

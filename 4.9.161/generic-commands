@@ -56,6 +56,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
             git diff v4.9.160..MERGE_HEAD arch/arm64/include/asm/arch_gicv3.h | git ap || exit 1 ;;
         *)
             git ap "${PATCHES_FOLDER}"/{Makefile,*.h}.diff || exit 1
+            git fp -1 --stdout MERGE_HEAD | git ap || exit 1
             [[ "${PWD##*/}" = "bluecross" ]] && { git ap "${PATCHES_FOLDER}"/cfi.c.diff || exit 1; } ;;
     esac
 

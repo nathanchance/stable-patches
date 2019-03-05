@@ -55,7 +55,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     case "$(basename "${PWD}"):$(git cb)" in
         msm-4.9:*r7*|op6:lineage-15.1|polaris:*) BRANCH=r7 ;;
-        msm-4.9:*r11*|op6*) BRANCH=r11 ;;
+        msm-4.9:*r11*|msm-4.9:*r12*|op6*) BRANCH=r11 ;;
     esac
     if [[ ${BRANCH} = "r11" ]]; then
         # arch/arm64/crypto/sha{1,2}-ce-glue.c

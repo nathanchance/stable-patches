@@ -51,7 +51,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     case "$(basename "${PWD}"):$(git cb)" in
         msm-4.9:*r7*) CONFLICTS=false ;;
-        bluecross*|msm-4.9:*r11*|op6*) CONFLICTS=true ;;
+        bluecross*|msm-4.9:*r1*|op6*) CONFLICTS=true ;;
     esac
     if ${CONFLICTS}; then
         git ap "${PATCHES_FOLDER}"/Makefile.diff || exit 1

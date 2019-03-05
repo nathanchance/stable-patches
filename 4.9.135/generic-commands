@@ -48,7 +48,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    [[ $(git cb) =~ r11 || $(git cb) =~ 9.0 || $(git cb) =~ staging ]] && { git fp -1 --stdout 914d085861c56585c3c2f9f1ce49bbb9547fb87f | git ap -R || exit 1; }
+    [[ $(git cb) =~ r1 || $(git cb) =~ 9.0 || $(git cb) =~ staging ]] && { git fp -1 --stdout 914d085861c56585c3c2f9f1ce49bbb9547fb87f | git ap -R || exit 1; }
     git ap "${PATCHES_FOLDER}"/cputime.c.diff || exit 1
 
     header "Committing merge"
