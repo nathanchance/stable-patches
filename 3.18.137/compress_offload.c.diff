@@ -1,0 +1,14 @@
+diff --git a/sound/core/compress_offload.c b/sound/core/compress_offload.c
+index 927367a9c1d5..a6298f9dc54c 100644
+--- a/sound/core/compress_offload.c
++++ b/sound/core/compress_offload.c
+@@ -507,7 +507,8 @@ static int snd_compress_check_input(struct snd_compr_params *params)
+ {
+ 	/* first let's check the buffer parameter's */
+ 	if (params->buffer.fragment_size == 0 ||
+-	    params->buffer.fragments > U32_MAX / params->buffer.fragment_size)
++	    params->buffer.fragments > U32_MAX / params->buffer.fragment_size ||
++	    params->buffer.fragments == 0)
+ 		return -EINVAL;
+ 
+ 	/* now codec parameters */
