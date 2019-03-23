@@ -52,7 +52,10 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/*.diff || exit 1
     git fp -1 --stdout 4400ef145f2b7aac21676b25942f32fb32ed724e arch/arm/kernel/irq.c | git ap -R || exit 1
-    git diff v4.4.176..MERGE_HEAD arch/arm/kernel/irq.c | git ap || exit 1;
+    git diff v4.4.176..MERGE_HEAD arch/arm/kernel/irq.c | git ap || exit 1
+    sed -i 's/global_attr/kobj_attribute/g' drivers/cpufreq/cpufreq_interactive.c
+    sed -i 's/struct attribute \*attr/struct kobj_attribute \*attr/g' drivers/cpufreq/cpufreq_interactive.c
+    git add drivers/cpufreq/cpufreq_interactive.c
 
     header "Committing merge"
     git fm || exit 1
