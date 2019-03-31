@@ -1,0 +1,14 @@
+diff --git a/drivers/usb/gadget/function/rndis.c b/drivers/usb/gadget/function/rndis.c
+index 19cfa0c53078..1d13d79d5070 100644
+--- a/drivers/usb/gadget/function/rndis.c
++++ b/drivers/usb/gadget/function/rndis.c
+@@ -688,8 +688,8 @@ static int rndis_reset_response(struct rndis_params *params,
+ {
+ 	rndis_reset_cmplt_type *resp;
+ 	rndis_resp_t *r;
+-	u32 length;
+ 	u8 *xbuf;
++	u32 length;
+ 
+ 	/* drain the response queue */
+ 	while ((xbuf = rndis_get_next_response(params, &length)))

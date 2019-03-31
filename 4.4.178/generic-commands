@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=( "arch/arm/Kconfig:2"
+                     "arch/arm64/kernel/image.h:1"
+                     "arch/arm64/kernel/traps.c:1"
+                     "drivers/hwtracing/coresight/coresight-tmc.c:1"
+                     "drivers/hwtracing/stm/core.c:8"
+                     "drivers/mmc/core/mmc.c:3"
+                     "drivers/usb/gadget/configfs.c:1"
+                     "drivers/usb/gadget/function/rndis.c:1"
+                     "drivers/usb/gadget/function/u_serial.c:1"
+                     "drivers/video/fbdev/goldfishfb.c:1"
+                     "kernel/events/ring_buffer.c:2"
+                     "kernel/sched/fair.c:1"
+                     "mm/vmstat.c:1"
+                     "net/wireless/nl80211.c:1"
+                     "sound/core/compress_offload.c:1" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    git fp -1 --stdout ed9feec72fc1fa194ebfdb79e14561b35decce63 | git ap || exit 1
+    git fp -1 --stdout e51534c806609c806d81bfb034f02737461f855c | git ap || exit 1
+    git ap "${PATCHES_FOLDER}"/compress_offload.c.diff || exit 1
+    [[ ${PWD} =~ wahoo ]] && git ap "${PATCHES_FOLDER}"/
+
+    header "Committing merge"
+    git fm || exit 1
+fi
