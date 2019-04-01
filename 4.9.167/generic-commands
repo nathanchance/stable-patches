@@ -18,7 +18,9 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "drivers/scsi/sd.c:2"
+APPROVED_CONFLICTS=( "arch/arm64/Kconfig:1"
+                     "drivers/scsi/sd.c:2"
+                     "kernel/cpu.c:1"
                      "net/wireless/nl80211.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
@@ -49,6 +51,12 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
+    [[ ${PWD} =~ bluecross ]] && { git ap "${PATCHES_FOLDER}"/arm64.Kconfig.diff || exit 1; }
+    case "$(git cb)" in
+        android-msm-*|oneplus/*|polaris*)
+            [[ ${PWD} =~ op6 ]] && { git fp -1 --stdout eff7e3a05f44 kernel/cpu.c | git ap -R || exit 1; }
+            git ap "${PATCHES_FOLDER}"/cpu.c.diff || exit 1 ;;
+    esac
     git fp -1 --stdout "$(git log --format=%H v4.9.166..MERGE_HEAD  drivers/scsi/sd.c | tail -n1)" | git ap || exit 1
 
     header "Committing merge"
