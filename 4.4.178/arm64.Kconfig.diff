@@ -1,0 +1,23 @@
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index 7eabbe018a8c..9643fd14d93a 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -103,7 +103,6 @@ config ARM64
+ 	select PERF_USE_VMALLOC
+ 	select POWER_RESET
+ 	select POWER_SUPPLY
+-	select RTC_LIB
+ 	select SPARSE_IRQ
+ 	select SYSCTL_EXCEPTION_TRACE
+ 	select HAVE_CONTEXT_TRACKING
+@@ -1136,6 +1135,10 @@ config SYSVIPC_COMPAT
+ 	def_bool y
+ 	depends on COMPAT && SYSVIPC
+ 
++config KEYS_COMPAT
++	def_bool y
++	depends on COMPAT && KEYS
++
+ config COMPAT_VDSO
+ 	bool "32-bit vDSO"
+ 	depends on COMPAT
