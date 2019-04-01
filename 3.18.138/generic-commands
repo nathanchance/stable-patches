@@ -18,7 +18,8 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "drivers/staging/android/sync.c:1" )
+APPROVED_CONFLICTS=( "arch/arm64/Kconfig:2"
+                     "drivers/staging/android/sync.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -47,8 +48,10 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
-    # header "Applying all patches"
-    # git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    if [[ ${PWD} =~ marlin ]]; then
+        header "Applying all patches"
+        git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    fi
 
     header "Committing merge"
     git fm || exit 1
