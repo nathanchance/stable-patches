@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=( "Makefile:1"
+                     "arch/x86/entry/vdso/Makefile:2" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    sed -i 's/which $(LD)/which $(CROSS_COMPILE)elfedit/g' Makefile
+    git add Makefile
+    [[ $(git diff-tree --no-commit-id --name-only -r MERGE_HEAD) = "Makefile" ]] && { git fp -1 --stdout MERGE_HEAD | git ap || exit 1; }
+    if grep -q -- --gcc-toolchain arch/x86/entry/vdso/Makefile; then
+        git rv -n c5aceac71b68f388cb011a8dc395943c5b083519 || exit 1
+        git diff v4.9.168..MERGE_HEAD arch/x86/entry/vdso/Makefile | git ap || exit 1
+    fi
+
+    header "Committing merge"
+    git fm || exit 1
+fi
