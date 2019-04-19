@@ -1,0 +1,18 @@
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index e70500d36631..f8ce348dbeb5 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
+@@ -756,6 +756,13 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 		if ((flags & BLKDEV_DISCARD_SECURE) && !blk_queue_secure_erase(q))
+ 			return -EOPNOTSUPP;
+ 
++		/*
++		 * We haven't replayed the journal, so we cannot use our
++		 * block-bitmap-guided storage zapping commands.
++		 */
++		if (test_opt(sb, NOLOAD) && ext4_has_feature_journal(sb))
++			return -EROFS;
++
+ 		if (copy_from_user(&range, (struct fstrim_range __user *)arg,
+ 		    sizeof(range)))
+ 			return -EFAULT;
