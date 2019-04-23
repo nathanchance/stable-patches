@@ -68,3 +68,6 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Committing merge"
     git fm || exit 1
 fi
+
+header "Applying futex patch"
+git am -3 "${PATCHES_FOLDER}"/0001-arm64-futex-Restore-oldval-initialization-to-work-ar.patch
