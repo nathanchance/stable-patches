@@ -19,7 +19,9 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "Makefile:1"
-                     "arch/x86/entry/vdso/Makefile:2" )
+                     "arch/x86/entry/vdso/Makefile:2"
+                     "fs/ext4/ioctl.c:1"
+                     "fs/f2fs/super.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -60,6 +62,8 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         fi
         git diff v4.4.178..MERGE_HEAD arch/x86/entry/vdso/Makefile | git ap || exit 1
     fi
+    git ap "${PATCHES_FOLDER}"/ioctl.c.diff || exit 1
+    grep -q "block_t user_block_count" fs/f2fs/super.c || { git ap "${PATCHES_FOLDER}"/super.c.diff || exit 1; }
 
     header "Committing merge"
     git fm || exit 1
