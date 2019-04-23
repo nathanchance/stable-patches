@@ -19,7 +19,8 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "drivers/tty/tty_buffer.c:1"
-                     "fs/binfmt_elf.c:1" )
+                     "fs/binfmt_elf.c:1"
+                     "include/net/netns/hash.h:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -52,6 +53,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     git fp -1 --stdout e0fdf79be02e679a1e4359dd64ed927920934536 | git ap -R || exit 1
     git fp -1 --stdout 7ab57b76ebf632bf2231ccabe26bea33868118c6 | git ap || exit 1
     [[ ${PWD##*/} = "marlin" ]] && { git ap "${PATCHES_FOLDER}"/binfmt_elf.c.diff || exit 1; }
+    git ap "${PATCHES_FOLDER}"/hash.h.diff || exit 1
 
     header "Committing merge"
     git fm || exit 1
