@@ -18,7 +18,7 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "Makefile:1"
+APPROVED_CONFLICTS=( "Makefile:2"
                      "arch/x86/entry/vdso/Makefile:2"
                      "fs/ext4/ioctl.c:1"
                      "fs/f2fs/super.c:1" )
@@ -53,7 +53,14 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     sed -i 's/which $(LD)/which $(CROSS_COMPILE)elfedit/g' Makefile
     git add Makefile
-    [[ $(git diff-tree --no-commit-id --name-only -r MERGE_HEAD) = "Makefile" ]] && { git fp -1 --stdout MERGE_HEAD | git ap || exit 1; }
+    if [[ ${PWD##*/} = "wahoo" ]]; then
+        git fp -1 --stdout 9a145148f1d8ac7bb0847d68154d7ea65b122bf4 | git ap -R || exit 1
+        [[ $(git diff-tree --no-commit-id --name-only -r MERGE_HEAD) = "Makefile" ]] && { git fp -1 --stdout MERGE_HEAD | git ap || exit 1; }
+    else
+        for COMMIT in $(git log --format=%H v4.4.178..MERGE_HEAD Makefile | head -n -1); do
+            git fp -1 --stdout "${COMMIT}" | git ap || exit 1
+        done
+    fi
     if grep -q -- --gcc-toolchain arch/x86/entry/vdso/Makefile; then
         if [[ ${PWD##*/} = "nash" ]]; then
             git rv -n 1372f5826a90cbbea255596f57e516258630dfeb || exit 1
