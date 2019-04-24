@@ -18,7 +18,7 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "Makefile:2"
+APPROVED_CONFLICTS=( "Makefile:3"
                      "arch/x86/entry/vdso/Makefile:2"
                      "fs/ext4/ioctl.c:1"
                      "fs/f2fs/super.c:1" )
