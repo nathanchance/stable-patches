@@ -19,6 +19,7 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "kernel/bpf/hashtab.c:2"
+                     "net/core/fib_rules.c:1"
                      "sound/core/pcm_native.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
@@ -48,10 +49,9 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
-    if [[ ${PWD##*/} != "polaris" ]]; then
-        header "Applying all patches"
-        git ap "${PATCHES_FOLDER}"/*.diff || exit 1
-    fi
+    header "Applying all patches"
+    git ap "${PATCHES_FOLDER}"/fib_rules.c.diff || exit 1
+    [[ ${PWD##*/} != "polaris" ]] && { git ap "${PATCHES_FOLDER}"/hashtab.c.diff || exit 1; }
 
     header "Committing merge"
     git fm || exit 1
