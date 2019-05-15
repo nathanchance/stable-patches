@@ -1,0 +1,23 @@
+diff --git a/init/main.c b/init/main.c
+index e9a1a00c6feb..6c71021ecdd4 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -552,6 +552,9 @@ asmlinkage __visible void __init start_kernel(void)
+ 	{
+ 		is_poweroff_charge = true;
+ 	}
++
++	/* parameters may set static keys */
++	jump_label_init();
+ 	parse_early_param();
+ 	after_dashes = parse_args("Booting kernel",
+ 				  static_command_line, __start___param,
+@@ -561,8 +564,6 @@ asmlinkage __visible void __init start_kernel(void)
+ 		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
+ 			   NULL, set_init_arg);
+ 
+-	jump_label_init();
+-
+ 	/*
+ 	 * These use large bootmem allocations and must precede
+ 	 * kmem_cache_init()

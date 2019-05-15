@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=( "arch/powerpc/include/asm/uaccess.h:1"
+                     "drivers/usb/core/hub.c:2"
+                     "fs/debugfs/inode.c:1"
+                     "include/linux/cpu.h:2"
+                     "init/main.c:1"
+                     "kernel/cpu.c:2"
+                     "kernel/irq/manage.c:1"
+                     "kernel/time/timer_stats.c:1:rm"
+                     "mm/vmstat.c:1"
+                     "net/ipv4/sysctl_net_ipv4.c:1" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+
+    # arch/powerpc/include/asm/uaccess.h
+    git ch MERGE_HEAD -- arch/powerpc/include/asm/uaccess.h
+
+    # drivers/usb/core/hub.c
+    if [[ "$(git cb)" =~ oneplus/QC8998_P_9.0 || "$(git cb)" = "android-9.0" ]]; then
+        git fp -1 --stdout e1b321167f4a8bb8bb19130c419f76eed707caa0 drivers/usb/core/hub.c | git ap -R || exit 1
+        git diff v4.4.179..MERGE_HEAD drivers/usb/core/hub.c | git ap || exit 1
+    fi
+
+    # include/linux/cpu.h
+    git ap "${PATCHES_FOLDER}"/cpu.h.diff || exit 1
+
+    # init/main.c
+    [[ ${PWD##*/} = "jasmine" || ${PWD##*/} = "whyred" ]] && { git ap "${PATCHES_FOLDER}"/${PWD##*/}-main.c.diff || exit 1; }
+
+    # kernel/cpu.c
+    git ap "${PATCHES_FOLDER}"/cpu.c.diff || exit 1
+
+    # kernel/irq/manage.c
+    git fp -1 --stdout efea8903218af963f77bba82a7263ca7840e0a34 | git ap -R || exit 1
+    git diff v4.4.179..MERGE_HEAD kernel/irq/manage.c | git ap || exit 1
+
+    # mm/vmstat.c
+    git fp -1 --stdout 287b1a8c1cb83f2c4bed561a2dc48b673e4eb1c9 mm/vmstat.c | git ap -R || exit 1
+    git diff v4.4.179..MERGE_HEAD mm/vmstat.c | git ap || exit 1
+    git ap "${PATCHES_FOLDER}"/0001-vmstat-Add-cpu-isolation-awareness.patch || exit 1
+
+    # net/ipv4/sysctl_net_ipv4.c
+    git ap "${PATCHES_FOLDER}"/sysctl_net_ipv4.c.diff || exit 1
+
+    header "Committing merge"
+    git fm || exit 1
+fi
