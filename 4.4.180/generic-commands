@@ -26,7 +26,6 @@ APPROVED_CONFLICTS=( "arch/powerpc/include/asm/uaccess.h:1"
                      "kernel/cpu.c:2"
                      "kernel/irq/manage.c:1"
                      "kernel/time/timer_stats.c:1:rm"
-                     "mm/vmstat.c:1"
                      "net/ipv4/sysctl_net_ipv4.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
@@ -79,11 +78,6 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     # kernel/irq/manage.c
     git fp -1 --stdout efea8903218af963f77bba82a7263ca7840e0a34 | git ap -R || exit 1
     git diff v4.4.179..MERGE_HEAD kernel/irq/manage.c | git ap || exit 1
-
-    # mm/vmstat.c
-    git fp -1 --stdout 287b1a8c1cb83f2c4bed561a2dc48b673e4eb1c9 mm/vmstat.c | git ap -R || exit 1
-    git diff v4.4.179..MERGE_HEAD mm/vmstat.c | git ap || exit 1
-    git ap "${PATCHES_FOLDER}"/0001-vmstat-Add-cpu-isolation-awareness.patch || exit 1
 
     # net/ipv4/sysctl_net_ipv4.c
     git ap "${PATCHES_FOLDER}"/sysctl_net_ipv4.c.diff || exit 1
