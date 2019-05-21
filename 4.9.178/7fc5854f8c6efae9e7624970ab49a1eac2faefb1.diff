@@ -1,0 +1,24 @@
+diff --git a/include/linux/backing-dev-defs.h b/include/linux/backing-dev-defs.h
+index 2c37f8b4532a..167bb972552e 100644
+--- a/include/linux/backing-dev-defs.h
++++ b/include/linux/backing-dev-defs.h
+@@ -161,6 +161,7 @@ struct backing_dev_info {
+ #ifdef CONFIG_CGROUP_WRITEBACK
+ 	struct radix_tree_root cgwb_tree; /* radix tree of active cgroup wbs */
+ 	struct rb_root cgwb_congested_tree; /* their congested states */
++	struct rw_semaphore wb_switch_rwsem; /* no cgwb switch while syncing */
+ #else
+ 	struct bdi_writeback_congested *wb_congested;
+ #endif
+diff --git a/mm/backing-dev.c b/mm/backing-dev.c
+index 62ca907e3aaf..40bb2bca5f64 100644
+--- a/mm/backing-dev.c
++++ b/mm/backing-dev.c
+@@ -690,6 +690,7 @@ static int cgwb_bdi_init(struct backing_dev_info *bdi)
+ 
+ 	INIT_RADIX_TREE(&bdi->cgwb_tree, GFP_ATOMIC);
+ 	bdi->cgwb_congested_tree = RB_ROOT;
++	init_rwsem(&bdi->wb_switch_rwsem);
+ 
+ 	ret = wb_init(&bdi->wb, bdi, 1, GFP_KERNEL);
+ 	if (!ret) {
