@@ -1,0 +1,14 @@
+diff --git a/arch/um/os-Linux/skas/process.c b/arch/um/os-Linux/skas/process.c
+index 72bba132593f..df4a985716eb 100644
+--- a/arch/um/os-Linux/skas/process.c
++++ b/arch/um/os-Linux/skas/process.c
+@@ -611,6 +611,9 @@ int start_idle_thread(void *stack, jmp_buf *switch_buf)
+ 	}
+ 	longjmp(*switch_buf, 1);
+ 
++	/* unreachable */
++	printk(UM_KERN_ERR "impossible long jump!");
++	fatal_sigsegv();
+ 	return 0;
+ }
+ 
