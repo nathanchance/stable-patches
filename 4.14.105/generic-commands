@@ -47,6 +47,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         fi
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+    git rf drivers/staging/android/ion/ion.c
 
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/*.diff || exit 1
