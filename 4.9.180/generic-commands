@@ -19,7 +19,15 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "arch/arm64/mm/proc.S:1"
-                     "drivers/scsi/sd.c:1" )
+                     "drivers/scsi/sd.c:1"
+                     "drivers/scsi/ufs/ufshcd.c:2" )
+if [[ ${PWD##*/} = "bluecross" ]]; then
+    APPROVED_CONFLICTS=( "${APPROVED_CONFLICTS[@]}"
+                         "arch/arm/vdso/vgettimeofday.c:1"
+                         "arch/arm64/kernel/asm-offsets.c:1"
+                         "arch/arm64/kernel/vdso.c:1"
+                         "arch/arm64/kernel/vdso/gettimeofday.S:1:rm" )
+fi
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
