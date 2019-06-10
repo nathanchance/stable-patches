@@ -18,7 +18,9 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "drivers/scsi/sd.c:1" )
+APPROVED_CONFLICTS=( "drivers/android/binder.c:2"
+                     "drivers/scsi/sd.c:1"
+                     "drivers/scsi/ufs/ufshcd.c:2" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -47,8 +49,10 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
-    header "Applying all patches"
-    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    if [[ ${PWD##*/} != "wahoo" ]]; then
+        header "Applying all patches"
+        git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    fi
 
     header "Committing merge"
     git fm || exit 1
