@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=( "drivers/android/binder.c:2"
+                     "drivers/firmware/efi/libstub/arm-stub.c:1"
+                     "drivers/firmware/efi/libstub/efi-stub-helper.c:1"
+                     "drivers/usb/host/xhci.c:2"
+                     "include/linux/fs.h:1"
+                     "net/core/fib_rules.c:2" )
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    git ap "${PATCHES_FOLDER}"/fib_rules.c.diff || exit 1
+    [[ ${PWD##*/} = "op6" && $(git cb) != "lineage-16.0" ]] && { git ap "${PATCHES_FOLDER}"/fs.h.diff || exit 1; }
+    [[ ${PWD##*/} = "polaris" ]] && { git ap "${PATCHES_FOLDER}"/xhci.c.diff || exit 1; }
+
+    header "Committing merge"
+    git fm || exit 1
+fi
