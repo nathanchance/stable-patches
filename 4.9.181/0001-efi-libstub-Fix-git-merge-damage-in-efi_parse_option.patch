@@ -1,0 +1,47 @@
+From 5ca0e09426cb3dd47eb76db196e96f60f9d29545 Mon Sep 17 00:00:00 2001
+From: Nathan Chancellor <natechancellor@gmail.com>
+Date: Mon, 10 Jun 2019 19:53:27 -0700
+Subject: [PATCH] efi/libstub: Fix git merge damage in efi_parse_options after
+ 4.9.143
+
+4.9.143 had a backport of upstream commit b3879a4d3a31 ("efi/libstub:
+Make file I/O chunking x86-specific"), which adds an if statement to
+efi_parse_options. Commit 60f38de7a8d4 ("efi/libstub: Unify command line
+param parsing") upstream replaces this if statement with a new one. That
+commit was backported to android-4.9 in commit e3111d5222d4 ("BACKPORT:
+efi/libstub: Unify command line param parsing") without b3879a4d3a31
+first so there was a conflict and the right hand side was taken. During
+the merge of 4.9.143, git placed the if statement from b3879a4d3a31
+after the one from 60f38de7a8d4. Remove it so that efi_parse_options
+matches upstream's.
+
+Change-Id: Iea36e4da4f152eff67c62dcfd4938ae7ec2451f5
+Fixes: e16c0406470a ("Merge 4.9.143 into android-4.9")
+Reported-by: khusika <khusikadhamar@gmail.com>
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/firmware/efi/libstub/efi-stub-helper.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/drivers/firmware/efi/libstub/efi-stub-helper.c b/drivers/firmware/efi/libstub/efi-stub-helper.c
+index d9843329e9b2..2514b266f29e 100644
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
++++ b/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -366,14 +366,6 @@ efi_status_t efi_parse_options(char const *cmdline)
+ 	if (str == cmdline || (str && str > cmdline && *(str - 1) == ' '))
+ 		__nokaslr = 1;
+ 
+-	/*
+-	 * Currently, the only efi= option we look for is 'nochunk', which
+-	 * is intended to work around known issues on certain x86 UEFI
+-	 * versions. So ignore for now on other architectures.
+-	 */
+-	if (!IS_ENABLED(CONFIG_X86))
+-		return EFI_SUCCESS;
+-
+ 	/*
+ 	 * If no EFI parameters were specified on the cmdline we've got
+ 	 * nothing to do.
+-- 
+2.22.0
+

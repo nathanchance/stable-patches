@@ -54,6 +54,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
 
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/fib_rules.c.diff || exit 1
+    [[ ${PWD##*/} != "polaris" ]] && { git ap "${PATCHES_FOLDER}"/0001-efi-libstub-Fix-git-merge-damage-in-efi_parse_option.patch || exit 1; }
     [[ ${PWD##*/} = "op6" && $(git cb) != "lineage-16.0" ]] && { git ap "${PATCHES_FOLDER}"/fs.h.diff || exit 1; }
     [[ ${PWD##*/} = "polaris" ]] && { git ap "${PATCHES_FOLDER}"/xhci.c.diff || exit 1; }
 
