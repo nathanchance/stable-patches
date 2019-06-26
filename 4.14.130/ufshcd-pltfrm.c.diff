@@ -1,0 +1,12 @@
+diff --git a/drivers/scsi/ufs/ufshcd-pltfrm.c b/drivers/scsi/ufs/ufshcd-pltfrm.c
+index dedcd7f28725..056633e3c11e 100644
+--- a/drivers/scsi/ufs/ufshcd-pltfrm.c
++++ b/drivers/scsi/ufs/ufshcd-pltfrm.c
+@@ -528,6 +528,7 @@ int ufshcd_pltfrm_init(struct platform_device *pdev,
+ 	pm_runtime_enable(&pdev->dev);
+ 
+ 	return 0;
++
+ dealloc_host:
+ 	ufshcd_dealloc_host(hba);
+ out:
