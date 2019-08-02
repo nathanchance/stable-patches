@@ -1,0 +1,51 @@
+From d383c91eed6ea76c98f30b33121f89b74fbe2f27 Mon Sep 17 00:00:00 2001
+From: Olav Haugan <ohaugan@codeaurora.org>
+Date: Sun, 29 May 2016 19:37:20 -0700
+Subject: [PATCH] vmstat: Add cpu isolation awareness
+
+Ensure vmstat updates do not run on isolated cpus.
+
+Change-Id: I401de0b52fa6d20573187265ee56edd543b1419e
+Signed-off-by: Olav Haugan <ohaugan@codeaurora.org>
+[nc: Rebase after backport of upstream commit f01f17d3705b ("mm, vmstat:
+     make quiet_vmstat lighter")]
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ mm/vmstat.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/mm/vmstat.c b/mm/vmstat.c
+index 84a789c14163..e297ed47aa58 100644
+--- a/mm/vmstat.c
++++ b/mm/vmstat.c
+@@ -1388,7 +1388,7 @@ static cpumask_var_t cpu_stat_off;
+ 
+ static void vmstat_update(struct work_struct *w)
+ {
+-	if (refresh_cpu_vm_stats(true)) {
++	if (refresh_cpu_vm_stats(true) && !cpu_isolated(smp_processor_id())) {
+ 		/*
+ 		 * Counters were updated so we expect more updates
+ 		 * to occur in the future. Keep on running the
+@@ -1405,7 +1405,8 @@ static void vmstat_update(struct work_struct *w)
+ 	} else {
+ 		/*
+ 		 * We did not update any counters so the app may be in
+-		 * a mode where it does not cause counter updates.
++		 * a mode where it does not cause counter updates or the cpu
++		 * was isolated.
+ 		 * We may be uselessly running vmstat_update.
+ 		 * Defer the checking for differentials to the
+ 		 * shepherd thread on a different processor.
+@@ -1486,7 +1487,7 @@ static void vmstat_shepherd(struct work_struct *w)
+ 	for_each_cpu(cpu, cpu_stat_off) {
+ 		struct delayed_work *dw = &per_cpu(vmstat_work, cpu);
+ 
+-		if (need_update(cpu)) {
++		if (!cpu_isolated(cpu) && need_update(cpu)) {
+ 			if (cpumask_test_and_clear_cpu(cpu, cpu_stat_off))
+ 				queue_delayed_work_on(cpu, vmstat_wq, dw, 0);
+ 		} else {
+-- 
+2.22.0.rc0
+
