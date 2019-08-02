@@ -52,7 +52,8 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     case "${PWD##*/}" in
         "sagit"|"wahoo"|"whyred") ;;
-        *) git ap "${PATCHES_FOLDER}"/hw.c.diff || exit 1 ;;
+        "jasmine") git ap "${PATCHES_FOLDER}"/hw.c.diff || exit 1 ;;
+        *) git ap "${PATCHES_FOLDER}"/hw.c.diff || exit 1; git rf fs/f2fs/segment.c ;;
     esac
     git ap "${PATCHES_FOLDER}"/crypto.c.diff || exit 1
     git fp -1 --stdout 287b1a8c1cb83f2c4bed561a2dc48b673e4eb1c9 mm/vmstat.c | git ap -R || exit 1

@@ -53,6 +53,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         bluecross) git ap "${PATCHES_FOLDER}"/crypto.c.diff || exit 1 ;;
         *) git ap "${PATCHES_FOLDER}"/msm_serial.c.diff || exit 1 ;;
     esac
+    git rf fs/f2fs/segment.c
 
     header "Committing merge"
     git fm || exit 1
