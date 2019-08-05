@@ -49,7 +49,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    if [[ ${PWD##*/} = "polaris" ]]; then
+    if [[ ${PWD##*/} != "polaris" ]]; then
         git ap "${PATCHES_FOLDER}"/Makefile.diff || exit 1
         git fp -1 --stdout MERGE_HEAD | git ap || exit 1
     fi
