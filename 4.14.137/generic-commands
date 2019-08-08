@@ -49,6 +49,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
 
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    git fp -1 --stdout MERGE_HEAD | git ap || exit 1
 
     header "Committing merge"
     git fm || exit 1
