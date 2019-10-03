@@ -1,0 +1,329 @@
+diff --git a/fs/f2fs/checkpoint.c b/fs/f2fs/checkpoint.c
+index 5029480e69f7..33bb15f1f367 100644
+--- a/fs/f2fs/checkpoint.c
++++ b/fs/f2fs/checkpoint.c
+@@ -842,6 +842,7 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
+ 	unsigned int cp_blks = 1 + __cp_payload(sbi);
+ 	block_t cp_blk_no;
+ 	int i;
++	int err;
+ 
+ 	sbi->ckpt = f2fs_kzalloc(sbi, array_size(blk_size, cp_blks),
+ 				 GFP_KERNEL);
+@@ -869,6 +870,7 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
+ 	} else if (cp2) {
+ 		cur_page = cp2;
+ 	} else {
++		err = -EFSCORRUPTED;
+ 		goto fail_no_cp;
+ 	}
+ 
+@@ -881,8 +883,10 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
+ 		sbi->cur_cp_pack = 2;
+ 
+ 	/* Sanity checking of checkpoint */
+-	if (f2fs_sanity_check_ckpt(sbi))
++	if (f2fs_sanity_check_ckpt(sbi)) {
++		err = -EFSCORRUPTED;
+ 		goto free_fail_no_cp;
++	}
+ 
+ 	if (cp_blks <= 1)
+ 		goto done;
+@@ -896,8 +900,10 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
+ 		unsigned char *ckpt = (unsigned char *)sbi->ckpt;
+ 
+ 		cur_page = f2fs_get_meta_page(sbi, cp_blk_no + i);
+-		if (IS_ERR(cur_page))
++		if (IS_ERR(cur_page)) {
++			err = PTR_ERR(cur_page);
+ 			goto free_fail_no_cp;
++		}
+ 		sit_bitmap_ptr = page_address(cur_page);
+ 		memcpy(ckpt + i * blk_size, sit_bitmap_ptr, blk_size);
+ 		f2fs_put_page(cur_page, 1);
+@@ -912,7 +918,7 @@ int f2fs_get_valid_checkpoint(struct f2fs_sb_info *sbi)
+ 	f2fs_put_page(cp2, 1);
+ fail_no_cp:
+ 	kvfree(sbi->ckpt);
+-	return -EINVAL;
++	return err;
+ }
+ 
+ static void __add_dirty_inode(struct inode *inode, enum inode_type type)
+diff --git a/fs/f2fs/data.c b/fs/f2fs/data.c
+index 51cf1f677728..221d044bf831 100644
+--- a/fs/f2fs/data.c
++++ b/fs/f2fs/data.c
+@@ -490,7 +490,7 @@ int f2fs_submit_page_bio(struct f2fs_io_info *fio)
+ 
+ 	if (!f2fs_is_valid_blkaddr(fio->sbi, fio->new_blkaddr,
+ 			__is_meta_io(fio) ? META_GENERIC : DATA_GENERIC))
+-		return -EFAULT;
++		return -EFSCORRUPTED;
+ 
+ 	trace_f2fs_submit_page_bio(page, fio);
+ 	f2fs_trace_ios(fio, 0);
+@@ -1155,7 +1155,7 @@ int f2fs_map_blocks(struct inode *inode, struct f2fs_map_blocks *map,
+ 
+ 	if (__is_valid_data_blkaddr(blkaddr) &&
+ 		!f2fs_is_valid_blkaddr(sbi, blkaddr, DATA_GENERIC)) {
+-		err = -EFAULT;
++		err = -EFSCORRUPTED;
+ 		goto sync_out;
+ 	}
+ 
+@@ -1899,7 +1899,7 @@ int f2fs_do_write_data_page(struct f2fs_io_info *fio)
+ 
+ 		if (!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+ 							DATA_GENERIC))
+-			return -EFAULT;
++			return -EFSCORRUPTED;
+ 
+ 		ipu_force = true;
+ 		fio->need_lock = LOCK_DONE;
+@@ -1926,7 +1926,7 @@ int f2fs_do_write_data_page(struct f2fs_io_info *fio)
+ 	if (__is_valid_data_blkaddr(fio->old_blkaddr) &&
+ 		!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+ 							DATA_GENERIC)) {
+-		err = -EFAULT;
++		err = -EFSCORRUPTED;
+ 		goto out_writepage;
+ 	}
+ 	/*
+diff --git a/fs/f2fs/f2fs.h b/fs/f2fs/f2fs.h
+index c1f4efb8fc5d..bd62292de21c 100644
+--- a/fs/f2fs/f2fs.h
++++ b/fs/f2fs/f2fs.h
+@@ -3690,3 +3690,7 @@ static inline bool is_journalled_quota(struct f2fs_sb_info *sbi)
+ }
+ 
+ #endif
++
++#define EFSBADCRC	EBADMSG		/* Bad CRC detected */
++#define EFSCORRUPTED	EUCLEAN		/* Filesystem is corrupted */
++
+diff --git a/fs/f2fs/inline.c b/fs/f2fs/inline.c
+index 9c9734348aba..78443fa9b919 100644
+--- a/fs/f2fs/inline.c
++++ b/fs/f2fs/inline.c
+@@ -161,7 +161,7 @@ int f2fs_convert_inline_page(struct dnode_of_data *dn, struct page *page)
+ 			"%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, "
+ 			"run fsck to fix.",
+ 			__func__, dn->inode->i_ino, dn->data_blkaddr);
+-		return -EINVAL;
++		return -EFSCORRUPTED;
+ 	}
+ 
+ 	f2fs_bug_on(F2FS_P_SB(page), PageWriteback(page));
+@@ -404,7 +404,7 @@ static int f2fs_move_inline_dirents(struct inode *dir, struct page *ipage,
+ 			"%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, "
+ 			"run fsck to fix.",
+ 			__func__, dir->i_ino, dn.data_blkaddr);
+-		err = -EINVAL;
++		err = -EFSCORRUPTED;
+ 		goto out;
+ 	}
+ 
+diff --git a/fs/f2fs/inode.c b/fs/f2fs/inode.c
+index 97ff1799e97a..bb35dbb0da11 100644
+--- a/fs/f2fs/inode.c
++++ b/fs/f2fs/inode.c
+@@ -74,7 +74,7 @@ static int __written_first_block(struct f2fs_sb_info *sbi,
+ 	if (!__is_valid_data_blkaddr(addr))
+ 		return 1;
+ 	if (!f2fs_is_valid_blkaddr(sbi, addr, DATA_GENERIC))
+-		return -EFAULT;
++		return -EFSCORRUPTED;
+ 	return 0;
+ }
+ 
+@@ -373,7 +373,7 @@ static int do_read_inode(struct inode *inode)
+ 
+ 	if (!sanity_check_inode(inode, node_page)) {
+ 		f2fs_put_page(node_page, 1);
+-		return -EINVAL;
++		return -EFSCORRUPTED;
+ 	}
+ 
+ 	/* check data exist */
+diff --git a/fs/f2fs/node.c b/fs/f2fs/node.c
+index e39c1a269de6..d2c9abb30a7e 100644
+--- a/fs/f2fs/node.c
++++ b/fs/f2fs/node.c
+@@ -37,7 +37,7 @@ int f2fs_check_nid_range(struct f2fs_sb_info *sbi, nid_t nid)
+ 		f2fs_msg(sbi->sb, KERN_WARNING,
+ 				"%s: out-of-range nid=%x, run fsck to fix.",
+ 				__func__, nid);
+-		return -EINVAL;
++		return -EFSCORRUPTED;
+ 	}
+ 	return 0;
+ }
+@@ -1360,7 +1360,7 @@ static struct page *__get_node_page(struct f2fs_sb_info *sbi, pgoff_t nid,
+ 	}
+ 
+ 	if (!f2fs_inode_chksum_verify(sbi, page)) {
+-		err = -EBADMSG;
++		err = -EFSBADCRC;
+ 		goto out_err;
+ 	}
+ page_hit:
+diff --git a/fs/f2fs/recovery.c b/fs/f2fs/recovery.c
+index a07090d222a1..9af5c7b962e3 100644
+--- a/fs/f2fs/recovery.c
++++ b/fs/f2fs/recovery.c
+@@ -552,7 +552,7 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
+ 			"Inconsistent ofs_of_node, ino:%lu, ofs:%u, %u",
+ 			inode->i_ino, ofs_of_node(dn.node_page),
+ 			ofs_of_node(page));
+-		err = -EFAULT;
++		err = -EFSCORRUPTED;
+ 		goto err;
+ 	}
+ 
+diff --git a/fs/f2fs/segment.c b/fs/f2fs/segment.c
+index 85bc38d13c3a..ec7f24b9e678 100644
+--- a/fs/f2fs/segment.c
++++ b/fs/f2fs/segment.c
+@@ -2772,7 +2772,7 @@ int f2fs_trim_fs(struct f2fs_sb_info *sbi, struct fstrim_range *range)
+ 	if (is_sbi_flag_set(sbi, SBI_NEED_FSCK)) {
+ 		f2fs_msg(sbi->sb, KERN_WARNING,
+ 			"Found FS corruption, run fsck to fix.");
+-		return -EIO;
++		return -EFSCORRUPTED;
+ 	}
+ 
+ 	/* start/end segment number in main_area */
+@@ -3386,11 +3386,6 @@ static int read_compacted_summaries(struct f2fs_sb_info *sbi)
+ 		seg_i = CURSEG_I(sbi, i);
+ 		segno = le32_to_cpu(ckpt->cur_data_segno[i]);
+ 		blk_off = le16_to_cpu(ckpt->cur_data_blkoff[i]);
+-		if (blk_off > ENTRIES_IN_SUM) {
+-			f2fs_bug_on(sbi, 1);
+-			f2fs_put_page(page, 1);
+-			return -EFAULT;
+-		}
+ 		seg_i->next_segno = segno;
+ 		reset_curseg(sbi, i, 0);
+ 		seg_i->alloc_type = ckpt->alloc_type[i];
+@@ -4098,7 +4093,7 @@ static int build_sit_entries(struct f2fs_sb_info *sbi)
+ 					"Wrong journal entry on segno %u",
+ 					start);
+ 			set_sbi_flag(sbi, SBI_NEED_FSCK);
+-			err = -EINVAL;
++			err = -EFSCORRUPTED;
+ 			break;
+ 		}
+ 
+@@ -4139,7 +4134,7 @@ static int build_sit_entries(struct f2fs_sb_info *sbi)
+ 			"SIT is corrupted node# %u vs %u",
+ 			total_node_blocks, valid_node_count(sbi));
+ 		set_sbi_flag(sbi, SBI_NEED_FSCK);
+-		err = -EINVAL;
++		err = -EFSCORRUPTED;
+ 	}
+ 
+ 	return err;
+@@ -4230,6 +4225,41 @@ static int build_dirty_segmap(struct f2fs_sb_info *sbi)
+ 	return init_victim_secmap(sbi);
+ }
+ 
++static int sanity_check_curseg(struct f2fs_sb_info *sbi)
++{
++	int i;
++
++	/*
++	 * In LFS/SSR curseg, .next_blkoff should point to an unused blkaddr;
++	 * In LFS curseg, all blkaddr after .next_blkoff should be unused.
++	 */
++	for (i = 0; i < NO_CHECK_TYPE; i++) {
++		struct curseg_info *curseg = CURSEG_I(sbi, i);
++		struct seg_entry *se = get_seg_entry(sbi, curseg->segno);
++		unsigned int blkofs = curseg->next_blkoff;
++
++		if (f2fs_test_bit(blkofs, se->cur_valid_map))
++			goto out;
++
++		if (curseg->alloc_type == SSR)
++			continue;
++
++		for (blkofs += 1; blkofs < sbi->blocks_per_seg; blkofs++) {
++			if (!f2fs_test_bit(blkofs, se->cur_valid_map))
++				continue;
++out:
++			f2fs_msg(sbi->sb, KERN_ERR,
++				"Current segment's next free block offset is "
++				"inconsistent with bitmap, logtype:%u, "
++				"segno:%u, type:%u, next_blkoff:%u, blkofs:%u",
++				i, curseg->segno, curseg->alloc_type,
++				curseg->next_blkoff, blkofs);
++			return -EFSCORRUPTED;
++		}
++	}
++	return 0;
++}
++
+ /*
+  * Update min, max modified time for cost-benefit GC algorithm
+  */
+@@ -4325,6 +4355,10 @@ int f2fs_build_segment_manager(struct f2fs_sb_info *sbi)
+ 	if (err)
+ 		return err;
+ 
++	err = sanity_check_curseg(sbi);
++	if (err)
++		return err;
++
+ 	init_min_max_mtime(sbi);
+ 	return 0;
+ }
+diff --git a/fs/f2fs/segment.h b/fs/f2fs/segment.h
+index 6f48e0763279..c08202f4f988 100644
+--- a/fs/f2fs/segment.h
++++ b/fs/f2fs/segment.h
+@@ -696,7 +696,7 @@ static inline int check_block_count(struct f2fs_sb_info *sbi,
+ 				"Mismatch valid blocks %d vs. %d",
+ 					GET_SIT_VBLOCKS(raw_sit), valid_blocks);
+ 		set_sbi_flag(sbi, SBI_NEED_FSCK);
+-		return -EINVAL;
++		return -EFSCORRUPTED;
+ 	}
+ 
+ 	/* check segment usage, and check boundary of a given segment number */
+@@ -706,7 +706,7 @@ static inline int check_block_count(struct f2fs_sb_info *sbi,
+ 				"Wrong valid blocks %d or segno %u",
+ 					GET_SIT_VBLOCKS(raw_sit), segno);
+ 		set_sbi_flag(sbi, SBI_NEED_FSCK);
+-		return -EINVAL;
++		return -EFSCORRUPTED;
+ 	}
+ 	return 0;
+ }
+diff --git a/fs/f2fs/super.c b/fs/f2fs/super.c
+index 2284e116dffa..8f5551850b3a 100644
+--- a/fs/f2fs/super.c
++++ b/fs/f2fs/super.c
+@@ -2680,11 +2680,11 @@ int f2fs_sanity_check_ckpt(struct f2fs_sb_info *sbi)
+ 		}
+ 	}
+ 	for (i = 0; i < NR_CURSEG_NODE_TYPE; i++) {
+-		for (j = i; j < NR_CURSEG_DATA_TYPE; j++) {
++		for (j = 0; j < NR_CURSEG_DATA_TYPE; j++) {
+ 			if (le32_to_cpu(ckpt->cur_node_segno[i]) ==
+ 				le32_to_cpu(ckpt->cur_data_segno[j])) {
+ 				f2fs_msg(sbi->sb, KERN_ERR,
+-					"Data segment (%u) and Data segment (%u)"
++					"Node segment (%u) and Data segment (%u)"
+ 					" has the same segno: %u", i, j,
+ 					le32_to_cpu(ckpt->cur_node_segno[i]));
+ 				return 1;
+@@ -2892,7 +2892,7 @@ static int read_raw_super_block(struct f2fs_sb_info *sbi,
+ 			f2fs_msg(sb, KERN_ERR,
+ 				"Can't find valid F2FS filesystem in %dth superblock",
+ 				block + 1);
+-			err = -EINVAL;
++			err = -EFSCORRUPTED;
+ 			brelse(bh);
+ 			continue;
+ 		}
