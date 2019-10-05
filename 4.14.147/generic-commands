@@ -53,6 +53,9 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/sdio_irq.c.diff || exit 1
     [[ -n ${F2FS_CONFLICTS} ]] && { git rf fs/f2fs; git ap "${PATCHES_FOLDER}"/f2fs.diff || exit 1; }
+    # 31df2523b3b8 ("net: qrtr: Move rx worker to separate worker thread") removed work member so a build
+    # error occurs with 088f93d00b81 ("net: qrtr: Stop rx_worker before freeing node")
+    ! grep -q "struct work_struct work" net/qrtr/qrtr.c && git rf net/qrtr/qrtr.c
 
     header "Committing merge"
     git fm || exit 1
