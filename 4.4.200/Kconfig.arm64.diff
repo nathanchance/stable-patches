@@ -1,0 +1,12 @@
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
+index 8b663a5166da..3ddc951b7568 100644
+--- a/arch/arm64/Kconfig
++++ b/arch/arm64/Kconfig
+@@ -105,7 +105,6 @@ config ARM64
+ 	select HAVE_CONTEXT_TRACKING
+ 	select HAVE_ARM_SMCCC
+ 	select THREAD_INFO_IN_TASK
+-	select HAVE_ARM_SMCCC
+ 	help
+ 	  ARM 64-bit (AArch64) Linux support.
+ 

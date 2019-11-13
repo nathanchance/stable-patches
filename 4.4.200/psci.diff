@@ -1,0 +1,201 @@
+diff --git a/drivers/cpuidle/lpm-levels.c b/drivers/cpuidle/lpm-levels.c
+index 324cce5d7354..e4a5a540202f 100644
+--- a/drivers/cpuidle/lpm-levels.c
++++ b/drivers/cpuidle/lpm-levels.c
+@@ -37,6 +37,7 @@
+ #include <linux/sched.h>
+ #include <linux/cpu_pm.h>
+ #include <linux/arm-smccc.h>
++#include <linux/psci.h>
+ #include <soc/qcom/spm.h>
+ #include <soc/qcom/pm.h>
+ #include <soc/qcom/rpm-notifier.h>
+diff --git a/drivers/firmware/psci.c b/drivers/firmware/psci.c
+index 07dc692851d8..dfb250392ba1 100644
+--- a/drivers/firmware/psci.c
++++ b/drivers/firmware/psci.c
+@@ -58,7 +58,10 @@ bool psci_tos_resident_on(int cpu)
+ 	return cpu == resident_cpu;
+ }
+ 
+-struct psci_operations psci_ops;
++struct psci_operations psci_ops = {
++	.conduit = PSCI_CONDUIT_NONE,
++	.smccc_version = SMCCC_VERSION_1_0,
++};
+ 
+ typedef unsigned long (psci_fn)(unsigned long, unsigned long,
+ 				unsigned long, unsigned long);
+@@ -109,6 +112,26 @@ bool psci_power_state_is_valid(u32 state)
+ 	return !(state & ~valid_mask);
+ }
+ 
++static unsigned long __invoke_psci_fn_hvc(unsigned long function_id,
++			unsigned long arg0, unsigned long arg1,
++			unsigned long arg2)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_hvc(function_id, arg0, arg1, arg2, 0, 0, 0, 0, &res);
++	return res.a0;
++}
++
++unsigned long __invoke_psci_fn_smc(unsigned long function_id,
++			unsigned long arg0, unsigned long arg1,
++			unsigned long arg2)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(function_id, arg0, arg1, arg2, 0, 0, 0, 0, &res);
++	return res.a0;
++}
++
+ static int psci_to_linux_errno(int errno)
+ {
+ 	switch (errno) {
+@@ -189,6 +212,22 @@ static unsigned long psci_migrate_info_up_cpu(void)
+ 			      0, 0, 0);
+ }
+ 
++static void set_conduit(enum psci_conduit conduit)
++{
++	switch (conduit) {
++	case PSCI_CONDUIT_HVC:
++		invoke_psci_fn = __invoke_psci_fn_hvc;
++		break;
++	case PSCI_CONDUIT_SMC:
++		invoke_psci_fn = __invoke_psci_fn_smc;
++		break;
++	default:
++		WARN(1, "Unexpected PSCI conduit %d\n", conduit);
++	}
++
++	psci_ops.conduit = conduit;
++}
++
+ static int get_set_conduit_method(struct device_node *np)
+ {
+ 	const char *method;
+@@ -201,9 +240,9 @@ static int get_set_conduit_method(struct device_node *np)
+ 	}
+ 
+ 	if (!strcmp("hvc", method)) {
+-		invoke_psci_fn = __invoke_psci_fn_hvc;
++		set_conduit(PSCI_CONDUIT_HVC);
+ 	} else if (!strcmp("smc", method)) {
+-		invoke_psci_fn = __invoke_psci_fn_smc;
++		set_conduit(PSCI_CONDUIT_SMC);
+ 	} else {
+ 		pr_warn("invalid \"method\" property: %s\n", method);
+ 		return -EINVAL;
+@@ -428,6 +467,31 @@ static void __init psci_init_migrate(void)
+ 	pr_info("Trusted OS resident on physical CPU 0x%lx\n", cpuid);
+ }
+ 
++static void __init psci_init_smccc(void)
++{
++	u32 ver = ARM_SMCCC_VERSION_1_0;
++	int feature;
++
++	feature = psci_features(ARM_SMCCC_VERSION_FUNC_ID);
++
++	if (feature != PSCI_RET_NOT_SUPPORTED) {
++		u32 ret;
++		ret = invoke_psci_fn(ARM_SMCCC_VERSION_FUNC_ID, 0, 0, 0);
++		if (ret == ARM_SMCCC_VERSION_1_1) {
++			psci_ops.smccc_version = SMCCC_VERSION_1_1;
++			ver = ret;
++		}
++	}
++
++	/*
++	 * Conveniently, the SMCCC and PSCI versions are encoded the
++	 * same way. No, this isn't accidental.
++	 */
++	pr_info("SMC Calling Convention v%d.%d\n",
++		PSCI_VERSION_MAJOR(ver), PSCI_VERSION_MINOR(ver));
++
++}
++
+ static void __init psci_0_2_set_functions(void)
+ {
+ 	pr_info("Using standard PSCI v0.2 function IDs\n");
+@@ -476,6 +540,7 @@ static int __init psci_probe(void)
+ 	psci_init_migrate();
+ 
+ 	if (PSCI_VERSION_MAJOR(ver) >= 1) {
++		psci_init_smccc();
+ 		psci_init_cpu_suspend();
+ 		psci_init_system_suspend();
+ 	}
+@@ -589,9 +654,9 @@ int __init psci_acpi_init(void)
+ 	pr_info("probing for conduit method from ACPI.\n");
+ 
+ 	if (acpi_psci_use_hvc())
+-		invoke_psci_fn = __invoke_psci_fn_hvc;
++		set_conduit(PSCI_CONDUIT_HVC);
+ 	else
+-		invoke_psci_fn = __invoke_psci_fn_smc;
++		set_conduit(PSCI_CONDUIT_SMC);
+ 
+ 	return psci_probe();
+ }
+diff --git a/drivers/power/qcom/apm.c b/drivers/power/qcom/apm.c
+index 9455468f1734..5fc54b9a4fcb 100644
+--- a/drivers/power/qcom/apm.c
++++ b/drivers/power/qcom/apm.c
+@@ -28,6 +28,7 @@
+ #include <linux/power/qcom/apm.h>
+ #include <soc/qcom/scm.h>
+ #include <linux/arm-smccc.h>
++#include <linux/psci.h>
+ 
+ /*
+  *        VDD_APCC
+diff --git a/drivers/regulator/spm-regulator.c b/drivers/regulator/spm-regulator.c
+index d469463a0b00..f98db3c5c58c 100644
+--- a/drivers/regulator/spm-regulator.c
++++ b/drivers/regulator/spm-regulator.c
+@@ -30,6 +30,7 @@
+ #include <linux/regulator/spm-regulator.h>
+ #include <soc/qcom/spm.h>
+ #include <linux/arm-smccc.h>
++#include <linux/psci.h>
+ 
+ #if defined(CONFIG_ARM64) || (defined(CONFIG_ARM) && defined(CONFIG_ARM_PSCI))
+ #else
+diff --git a/include/linux/psci.h b/include/linux/psci.h
+index 66499dd612f5..ab1c6d267b19 100644
+--- a/include/linux/psci.h
++++ b/include/linux/psci.h
+@@ -27,6 +27,21 @@ bool psci_power_state_is_valid(u32 state);
+ int psci_cpu_init_idle(unsigned int cpu);
+ int psci_cpu_suspend_enter(unsigned long index);
+ 
++unsigned long __invoke_psci_fn_smc(unsigned long function_id,
++			unsigned long arg0, unsigned long arg1,
++			unsigned long arg2);
++
++enum psci_conduit {
++	PSCI_CONDUIT_NONE,
++	PSCI_CONDUIT_SMC,
++	PSCI_CONDUIT_HVC,
++};
++
++enum smccc_version {
++	SMCCC_VERSION_1_0,
++	SMCCC_VERSION_1_1,
++};
++
+ struct psci_operations {
+ 	u32 (*get_version)(void);
+ 	int (*cpu_suspend)(u32 state, unsigned long entry_point);
+@@ -36,6 +51,8 @@ struct psci_operations {
+ 	int (*affinity_info)(unsigned long target_affinity,
+ 			unsigned long lowest_affinity_level);
+ 	int (*migrate_info_type)(void);
++	enum psci_conduit conduit;
++	enum smccc_version smccc_version;
+ };
+ 
+ extern struct psci_operations psci_ops;
