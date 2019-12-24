@@ -18,7 +18,10 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "include/linux/thread_info.h:2" )
+APPROVED_CONFLICTS=( "drivers/thermal/thermal_core.c:1"
+                     "drivers/usb/dwc3/core.c:1"
+                     "drivers/usb/host/xhci.c:2"
+                     "scripts/mod/modpost.c:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -46,7 +49,13 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
         fi
     done
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    git ap "${PATCHES_FOLDER}"/thermal_core.c.diff || exit ${?}
+    git rf drivers/usb/host
     git rf drivers/usb/gadget/configfs.c
+    git ap "${PATCHES_FOLDER}"/xhci.diff || exit ${?}
+    grep -q CONFIG_CFI_CLANG scripts/mod/modpost.c && { git ap "${PATCHES_FOLDER}"/modpost.c.diff || exit ${?}; }
 
     header "Committing merge"
     git fm || exit 1

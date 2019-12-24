@@ -1,0 +1,180 @@
+From 53dfae5cea5baef58ebac99d930e41477d7c95a5 Mon Sep 17 00:00:00 2001
+From: Kai-Heng Feng <kai.heng.feng@canonical.com>
+Date: Wed, 11 Dec 2019 16:20:05 +0200
+Subject: [PATCH 1/3] xhci: Increase STS_HALT timeout in xhci_suspend()
+
+I've recently observed failed xHCI suspend attempt on AMD Raven Ridge
+system:
+kernel: xhci_hcd 0000:04:00.4: WARN: xHC CMD_RUN timeout
+kernel: PM: suspend_common(): xhci_pci_suspend+0x0/0xd0 returns -110
+kernel: PM: pci_pm_suspend(): hcd_pci_suspend+0x0/0x30 returns -110
+kernel: PM: dpm_run_callback(): pci_pm_suspend+0x0/0x150 returns -110
+kernel: PM: Device 0000:04:00.4 failed to suspend async: error -110
+
+Similar to commit ac343366846a ("xhci: Increase STS_SAVE timeout in
+xhci_suspend()") we also need to increase the HALT timeout to make it be
+able to suspend again.
+
+Cc: <stable@vger.kernel.org> # 5.2+
+Fixes: f7fac17ca925 ("xhci: Convert xhci_handshake() to use readl_poll_timeout_atomic()")
+Signed-off-by: Kai-Heng Feng <kai.heng.feng@canonical.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-5-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/7c67cf6658cec70d8a43229f2ce74ca1443dc95e
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
+index 919e0b85ba62..07e190d45259 100644
+--- a/drivers/usb/host/xhci.c
++++ b/drivers/usb/host/xhci.c
+@@ -976,7 +976,7 @@ static bool xhci_pending_portevent(struct xhci_hcd *xhci)
+ int xhci_suspend(struct xhci_hcd *xhci, bool do_wakeup)
+ {
+ 	int			rc = 0;
+-	unsigned int		delay = XHCI_MAX_HALT_USEC;
++	unsigned int		delay = XHCI_MAX_HALT_USEC * 2;
+ 	struct usb_hcd		*hcd = xhci_to_hcd(xhci);
+ 	u32			command;
+ 
+-- 
+2.24.1
+
+
+From 455641fd478b8e49728246865688ac12a3be680a Mon Sep 17 00:00:00 2001
+From: Henry Lin <henryl@nvidia.com>
+Date: Wed, 11 Dec 2019 16:20:04 +0200
+Subject: [PATCH 2/3] usb: xhci: only set D3hot for pci device
+
+Xhci driver cannot call pci_set_power_state() on non-pci xhci host
+controllers. For example, NVIDIA Tegra XHCI host controller which acts
+as platform device with XHCI_SPURIOUS_WAKEUP quirk set in some platform
+hits this issue during shutdown.
+
+Cc: <stable@vger.kernel.org>
+Fixes: 638298dc66ea ("xhci: Fix spurious wakeups after S5 on Haswell")
+Signed-off-by: Henry Lin <henryl@nvidia.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-4-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/f2c710f7dca8457e88b4ac9de2060f011254f9dd
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-pci.c | 13 +++++++++++++
+ drivers/usb/host/xhci.c     |  5 +----
+ drivers/usb/host/xhci.h     |  1 +
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 3e6c4372848c..5c5ea171dcf0 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -472,6 +472,18 @@ static int xhci_pci_resume(struct usb_hcd *hcd, bool hibernated)
+ }
+ #endif /* CONFIG_PM */
+ 
++static void xhci_pci_shutdown(struct usb_hcd *hcd)
++{
++	struct xhci_hcd		*xhci = hcd_to_xhci(hcd);
++	struct pci_dev		*pdev = to_pci_dev(hcd->self.controller);
++
++	xhci_shutdown(hcd);
++
++	/* Yet another workaround for spurious wakeups at shutdown with HSW */
++	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
++		pci_set_power_state(pdev, PCI_D3hot);
++}
++
+ /*-------------------------------------------------------------------------*/
+ 
+ /* PCI driver selection metadata; PCI hotplugging uses this */
+@@ -507,6 +519,7 @@ static int __init xhci_pci_init(void)
+ #ifdef CONFIG_PM
+ 	xhci_pci_hc_driver.pci_suspend = xhci_pci_suspend;
+ 	xhci_pci_hc_driver.pci_resume = xhci_pci_resume;
++	xhci_pci_hc_driver.shutdown = xhci_pci_shutdown;
+ #endif
+ 	return pci_register_driver(&xhci_pci_driver);
+ }
+diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
+index 07e190d45259..0fcc23bda949 100644
+--- a/drivers/usb/host/xhci.c
++++ b/drivers/usb/host/xhci.c
+@@ -801,11 +801,8 @@ void xhci_shutdown(struct usb_hcd *hcd)
+ 	xhci_dbg_trace(xhci, trace_xhci_dbg_init,
+ 			"xhci_shutdown completed - status = %x",
+ 			readl(&xhci->op_regs->status));
+-
+-	/* Yet another workaround for spurious wakeups at shutdown with HSW */
+-	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
+-		pci_set_power_state(to_pci_dev(hcd->self.sysdev), PCI_D3hot);
+ }
++EXPORT_SYMBOL_GPL(xhci_shutdown);
+ 
+ #ifdef CONFIG_PM
+ static void xhci_save_registers(struct xhci_hcd *xhci)
+diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
+index 016f7a1099c9..d0c2ad4b1308 100644
+--- a/drivers/usb/host/xhci.h
++++ b/drivers/usb/host/xhci.h
+@@ -1880,6 +1880,7 @@ int xhci_run(struct usb_hcd *hcd);
+ void xhci_stop(struct usb_hcd *hcd);
+ void xhci_shutdown(struct usb_hcd *hcd);
+ int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks);
++void xhci_shutdown(struct usb_hcd *hcd);
+ void xhci_init_driver(struct hc_driver *drv,
+ 		      const struct xhci_driver_overrides *over);
+ 
+-- 
+2.24.1
+
+
+From dc965fc683e2ce1e7d40ccf22c6baa9aaa78f9b9 Mon Sep 17 00:00:00 2001
+From: Guenter Roeck <linux@roeck-us.net>
+Date: Tue, 17 Dec 2019 17:19:11 -0800
+Subject: [PATCH 3/3] usb: xhci: Fix build warning seen with CONFIG_PM=n
+
+The following build warning is seen if CONFIG_PM is disabled.
+
+drivers/usb/host/xhci-pci.c:498:13: warning:
+	unused function 'xhci_pci_shutdown'
+
+Fixes: f2c710f7dca8 ("usb: xhci: only set D3hot for pci device")
+Cc: Henry Lin <henryl@nvidia.com>
+Cc: stable@vger.kernel.org	# all stable releases with f2c710f7dca8
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+Acked-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191218011911.6907-1-linux@roeck-us.net
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/6056a0f8ede27b296d10ef46f7f677cc9d715371
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-pci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 5c5ea171dcf0..e10808c57c12 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -470,7 +470,6 @@ static int xhci_pci_resume(struct usb_hcd *hcd, bool hibernated)
+ 	retval = xhci_resume(xhci, hibernated);
+ 	return retval;
+ }
+-#endif /* CONFIG_PM */
+ 
+ static void xhci_pci_shutdown(struct usb_hcd *hcd)
+ {
+@@ -483,6 +482,7 @@ static void xhci_pci_shutdown(struct usb_hcd *hcd)
+ 	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
+ 		pci_set_power_state(pdev, PCI_D3hot);
+ }
++#endif /* CONFIG_PM */
+ 
+ /*-------------------------------------------------------------------------*/
+ 
+-- 
+2.24.1
+

@@ -1,0 +1,469 @@
+From 53dfae5cea5baef58ebac99d930e41477d7c95a5 Mon Sep 17 00:00:00 2001
+From: Kai-Heng Feng <kai.heng.feng@canonical.com>
+Date: Wed, 11 Dec 2019 16:20:05 +0200
+Subject: [PATCH 1/6] xhci: Increase STS_HALT timeout in xhci_suspend()
+
+I've recently observed failed xHCI suspend attempt on AMD Raven Ridge
+system:
+kernel: xhci_hcd 0000:04:00.4: WARN: xHC CMD_RUN timeout
+kernel: PM: suspend_common(): xhci_pci_suspend+0x0/0xd0 returns -110
+kernel: PM: pci_pm_suspend(): hcd_pci_suspend+0x0/0x30 returns -110
+kernel: PM: dpm_run_callback(): pci_pm_suspend+0x0/0x150 returns -110
+kernel: PM: Device 0000:04:00.4 failed to suspend async: error -110
+
+Similar to commit ac343366846a ("xhci: Increase STS_SAVE timeout in
+xhci_suspend()") we also need to increase the HALT timeout to make it be
+able to suspend again.
+
+Cc: <stable@vger.kernel.org> # 5.2+
+Fixes: f7fac17ca925 ("xhci: Convert xhci_handshake() to use readl_poll_timeout_atomic()")
+Signed-off-by: Kai-Heng Feng <kai.heng.feng@canonical.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-5-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/7c67cf6658cec70d8a43229f2ce74ca1443dc95e
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
+index 919e0b85ba62..07e190d45259 100644
+--- a/drivers/usb/host/xhci.c
++++ b/drivers/usb/host/xhci.c
+@@ -976,7 +976,7 @@ static bool xhci_pending_portevent(struct xhci_hcd *xhci)
+ int xhci_suspend(struct xhci_hcd *xhci, bool do_wakeup)
+ {
+ 	int			rc = 0;
+-	unsigned int		delay = XHCI_MAX_HALT_USEC;
++	unsigned int		delay = XHCI_MAX_HALT_USEC * 2;
+ 	struct usb_hcd		*hcd = xhci_to_hcd(xhci);
+ 	u32			command;
+ 
+-- 
+2.24.1
+
+
+From 455641fd478b8e49728246865688ac12a3be680a Mon Sep 17 00:00:00 2001
+From: Henry Lin <henryl@nvidia.com>
+Date: Wed, 11 Dec 2019 16:20:04 +0200
+Subject: [PATCH 2/6] usb: xhci: only set D3hot for pci device
+
+Xhci driver cannot call pci_set_power_state() on non-pci xhci host
+controllers. For example, NVIDIA Tegra XHCI host controller which acts
+as platform device with XHCI_SPURIOUS_WAKEUP quirk set in some platform
+hits this issue during shutdown.
+
+Cc: <stable@vger.kernel.org>
+Fixes: 638298dc66ea ("xhci: Fix spurious wakeups after S5 on Haswell")
+Signed-off-by: Henry Lin <henryl@nvidia.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-4-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/f2c710f7dca8457e88b4ac9de2060f011254f9dd
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-pci.c | 13 +++++++++++++
+ drivers/usb/host/xhci.c     |  5 +----
+ drivers/usb/host/xhci.h     |  1 +
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 3e6c4372848c..5c5ea171dcf0 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -472,6 +472,18 @@ static int xhci_pci_resume(struct usb_hcd *hcd, bool hibernated)
+ }
+ #endif /* CONFIG_PM */
+ 
++static void xhci_pci_shutdown(struct usb_hcd *hcd)
++{
++	struct xhci_hcd		*xhci = hcd_to_xhci(hcd);
++	struct pci_dev		*pdev = to_pci_dev(hcd->self.controller);
++
++	xhci_shutdown(hcd);
++
++	/* Yet another workaround for spurious wakeups at shutdown with HSW */
++	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
++		pci_set_power_state(pdev, PCI_D3hot);
++}
++
+ /*-------------------------------------------------------------------------*/
+ 
+ /* PCI driver selection metadata; PCI hotplugging uses this */
+@@ -507,6 +519,7 @@ static int __init xhci_pci_init(void)
+ #ifdef CONFIG_PM
+ 	xhci_pci_hc_driver.pci_suspend = xhci_pci_suspend;
+ 	xhci_pci_hc_driver.pci_resume = xhci_pci_resume;
++	xhci_pci_hc_driver.shutdown = xhci_pci_shutdown;
+ #endif
+ 	return pci_register_driver(&xhci_pci_driver);
+ }
+diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
+index 07e190d45259..0fcc23bda949 100644
+--- a/drivers/usb/host/xhci.c
++++ b/drivers/usb/host/xhci.c
+@@ -801,11 +801,8 @@ void xhci_shutdown(struct usb_hcd *hcd)
+ 	xhci_dbg_trace(xhci, trace_xhci_dbg_init,
+ 			"xhci_shutdown completed - status = %x",
+ 			readl(&xhci->op_regs->status));
+-
+-	/* Yet another workaround for spurious wakeups at shutdown with HSW */
+-	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
+-		pci_set_power_state(to_pci_dev(hcd->self.sysdev), PCI_D3hot);
+ }
++EXPORT_SYMBOL_GPL(xhci_shutdown);
+ 
+ #ifdef CONFIG_PM
+ static void xhci_save_registers(struct xhci_hcd *xhci)
+diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
+index 016f7a1099c9..d0c2ad4b1308 100644
+--- a/drivers/usb/host/xhci.h
++++ b/drivers/usb/host/xhci.h
+@@ -1880,6 +1880,7 @@ int xhci_run(struct usb_hcd *hcd);
+ void xhci_stop(struct usb_hcd *hcd);
+ void xhci_shutdown(struct usb_hcd *hcd);
+ int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks);
++void xhci_shutdown(struct usb_hcd *hcd);
+ void xhci_init_driver(struct hc_driver *drv,
+ 		      const struct xhci_driver_overrides *over);
+ 
+-- 
+2.24.1
+
+
+From dc965fc683e2ce1e7d40ccf22c6baa9aaa78f9b9 Mon Sep 17 00:00:00 2001
+From: Guenter Roeck <linux@roeck-us.net>
+Date: Tue, 17 Dec 2019 17:19:11 -0800
+Subject: [PATCH 3/6] usb: xhci: Fix build warning seen with CONFIG_PM=n
+
+The following build warning is seen if CONFIG_PM is disabled.
+
+drivers/usb/host/xhci-pci.c:498:13: warning:
+	unused function 'xhci_pci_shutdown'
+
+Fixes: f2c710f7dca8 ("usb: xhci: only set D3hot for pci device")
+Cc: Henry Lin <henryl@nvidia.com>
+Cc: stable@vger.kernel.org	# all stable releases with f2c710f7dca8
+Signed-off-by: Guenter Roeck <linux@roeck-us.net>
+Acked-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191218011911.6907-1-linux@roeck-us.net
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/linus/6056a0f8ede27b296d10ef46f7f677cc9d715371
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-pci.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index 5c5ea171dcf0..e10808c57c12 100644
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -470,7 +470,6 @@ static int xhci_pci_resume(struct usb_hcd *hcd, bool hibernated)
+ 	retval = xhci_resume(xhci, hibernated);
+ 	return retval;
+ }
+-#endif /* CONFIG_PM */
+ 
+ static void xhci_pci_shutdown(struct usb_hcd *hcd)
+ {
+@@ -483,6 +482,7 @@ static void xhci_pci_shutdown(struct usb_hcd *hcd)
+ 	if (xhci->quirks & XHCI_SPURIOUS_WAKEUP)
+ 		pci_set_power_state(pdev, PCI_D3hot);
+ }
++#endif /* CONFIG_PM */
+ 
+ /*-------------------------------------------------------------------------*/
+ 
+-- 
+2.24.1
+
+
+From ff4fa5ebc994ea2c10b4fecee70e51cd4412a2a2 Mon Sep 17 00:00:00 2001
+From: Mika Westerberg <mika.westerberg@linux.intel.com>
+Date: Wed, 11 Dec 2019 16:20:02 +0200
+Subject: [PATCH 4/6] xhci: Fix memory leak in xhci_add_in_port()
+
+[ Upstream commit ce91f1a43b37463f517155bdfbd525eb43adbd1a ]
+
+When xHCI is part of Alpine or Titan Ridge Thunderbolt controller and
+the xHCI device is hot-removed as a result of unplugging a dock for
+example, the driver leaks memory it allocates for xhci->usb3_rhub.psi
+and xhci->usb2_rhub.psi in xhci_add_in_port() as reported by kmemleak:
+
+unreferenced object 0xffff922c24ef42f0 (size 16):
+  comm "kworker/u16:2", pid 178, jiffies 4294711640 (age 956.620s)
+  hex dump (first 16 bytes):
+    21 00 0c 00 12 00 dc 05 23 00 e0 01 00 00 00 00  !.......#.......
+  backtrace:
+    [<000000007ac80914>] xhci_mem_init+0xcf8/0xeb7
+    [<0000000001b6d775>] xhci_init+0x7c/0x160
+    [<00000000db443fe3>] xhci_gen_setup+0x214/0x340
+    [<00000000fdffd320>] xhci_pci_setup+0x48/0x110
+    [<00000000541e1e03>] usb_add_hcd.cold+0x265/0x747
+    [<00000000ca47a56b>] usb_hcd_pci_probe+0x219/0x3b4
+    [<0000000021043861>] xhci_pci_probe+0x24/0x1c0
+    [<00000000b9231f25>] local_pci_probe+0x3d/0x70
+    [<000000006385c9d7>] pci_device_probe+0xd0/0x150
+    [<0000000070241068>] really_probe+0xf5/0x3c0
+    [<0000000061f35c0a>] driver_probe_device+0x58/0x100
+    [<000000009da11198>] bus_for_each_drv+0x79/0xc0
+    [<000000009ce45f69>] __device_attach+0xda/0x160
+    [<00000000df201aaf>] pci_bus_add_device+0x46/0x70
+    [<0000000088a1bc48>] pci_bus_add_devices+0x27/0x60
+    [<00000000ad9ee708>] pci_bus_add_devices+0x52/0x60
+unreferenced object 0xffff922c24ef3318 (size 8):
+  comm "kworker/u16:2", pid 178, jiffies 4294711640 (age 956.620s)
+  hex dump (first 8 bytes):
+    34 01 05 00 35 41 0a 00                          4...5A..
+  backtrace:
+    [<000000007ac80914>] xhci_mem_init+0xcf8/0xeb7
+    [<0000000001b6d775>] xhci_init+0x7c/0x160
+    [<00000000db443fe3>] xhci_gen_setup+0x214/0x340
+    [<00000000fdffd320>] xhci_pci_setup+0x48/0x110
+    [<00000000541e1e03>] usb_add_hcd.cold+0x265/0x747
+    [<00000000ca47a56b>] usb_hcd_pci_probe+0x219/0x3b4
+    [<0000000021043861>] xhci_pci_probe+0x24/0x1c0
+    [<00000000b9231f25>] local_pci_probe+0x3d/0x70
+    [<000000006385c9d7>] pci_device_probe+0xd0/0x150
+    [<0000000070241068>] really_probe+0xf5/0x3c0
+    [<0000000061f35c0a>] driver_probe_device+0x58/0x100
+    [<000000009da11198>] bus_for_each_drv+0x79/0xc0
+    [<000000009ce45f69>] __device_attach+0xda/0x160
+    [<00000000df201aaf>] pci_bus_add_device+0x46/0x70
+    [<0000000088a1bc48>] pci_bus_add_devices+0x27/0x60
+    [<00000000ad9ee708>] pci_bus_add_devices+0x52/0x60
+
+Fix this by calling kfree() for the both psi objects in
+xhci_mem_cleanup().
+
+Cc: <stable@vger.kernel.org> # 4.4+
+Fixes: 47189098f8be ("xhci: parse xhci protocol speed ID list for usb 3.1 usage")
+Signed-off-by: Mika Westerberg <mika.westerberg@linux.intel.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-2-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+Link: https://git.kernel.org/stable/c/bc9fd1f5bf09ff9ad9a9b706ce2357aec328bbc7
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-mem.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/usb/host/xhci-mem.c b/drivers/usb/host/xhci-mem.c
+index 6b71b45a5edc..1ac64d7ebcba 100644
+--- a/drivers/usb/host/xhci-mem.c
++++ b/drivers/usb/host/xhci-mem.c
+@@ -2071,10 +2071,14 @@ void xhci_mem_cleanup(struct xhci_hcd *xhci)
+ 	kfree(xhci->port_array);
+ 	kfree(xhci->rh_bw);
+ 	kfree(xhci->ext_caps);
++	kfree(xhci->usb2_rhub.psi);
++	kfree(xhci->usb3_rhub.psi);
+ 
+ 	xhci->usb2_ports = NULL;
+ 	xhci->usb3_ports = NULL;
+ 	xhci->port_array = NULL;
++	xhci->usb2_rhub.psi = NULL;
++	xhci->usb3_rhub.psi = NULL;
+ 	xhci->rh_bw = NULL;
+ 	xhci->ext_caps = NULL;
+ 
+-- 
+2.24.1
+
+
+From 6eb5792d4a4467b6ff46f0a2dc68e29758a74608 Mon Sep 17 00:00:00 2001
+From: Mathias Nyman <mathias.nyman@linux.intel.com>
+Date: Wed, 11 Dec 2019 16:20:07 +0200
+Subject: [PATCH 5/6] xhci: make sure interrupts are restored to correct state
+
+[ Upstream commit bd82873f23c9a6ad834348f8b83f3b6a5bca2c65 ]
+
+spin_unlock_irqrestore() might be called with stale flags after
+reading port status, possibly restoring interrupts to a incorrect
+state.
+
+If a usb2 port just finished resuming while the port status is read
+the spin lock will be temporary released and re-acquired in a separate
+function. The flags parameter is passed as value instead of a pointer,
+not updating flags properly before the final spin_unlock_irqrestore()
+is called.
+
+Cc: <stable@vger.kernel.org> # v3.12+
+Fixes: 8b3d45705e54 ("usb: Fix xHCI host issues on remote wakeup.")
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-7-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+Link: https://git.kernel.org/stable/c/bedf0c0e5515d82f723304db7601f816b1268f81
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-hub.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/usb/host/xhci-hub.c b/drivers/usb/host/xhci-hub.c
+index 867987502648..b68a92338304 100644
+--- a/drivers/usb/host/xhci-hub.c
++++ b/drivers/usb/host/xhci-hub.c
+@@ -732,7 +732,7 @@ static u32 xhci_get_port_status(struct usb_hcd *hcd,
+ 		struct xhci_bus_state *bus_state,
+ 		__le32 __iomem **port_array,
+ 		u16 wIndex, u32 raw_port_status,
+-		unsigned long flags)
++		unsigned long *flags)
+ 	__releases(&xhci->lock)
+ 	__acquires(&xhci->lock)
+ {
+@@ -814,12 +814,12 @@ static u32 xhci_get_port_status(struct usb_hcd *hcd,
+ 			xhci_set_link_state(xhci, port_array, wIndex,
+ 					XDEV_U0);
+ 
+-			spin_unlock_irqrestore(&xhci->lock, flags);
++			spin_unlock_irqrestore(&xhci->lock, *flags);
+ 			time_left = wait_for_completion_timeout(
+ 					&bus_state->rexit_done[wIndex],
+ 					msecs_to_jiffies(
+ 						XHCI_MAX_REXIT_TIMEOUT_MS));
+-			spin_lock_irqsave(&xhci->lock, flags);
++			spin_lock_irqsave(&xhci->lock, *flags);
+ 
+ 			if (time_left) {
+ 				slot_id = xhci_find_slot_id_by_port(hcd,
+@@ -1112,7 +1112,7 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
+ 			break;
+ 		}
+ 		status = xhci_get_port_status(hcd, bus_state, port_array,
+-				wIndex, temp, flags);
++				wIndex, temp, &flags);
+ 		if (status == 0xffffffff)
+ 			goto error;
+ 
+-- 
+2.24.1
+
+
+From be6bf7a593c545ce2ac3624431cc71aca0f2480d Mon Sep 17 00:00:00 2001
+From: Mathias Nyman <mathias.nyman@linux.intel.com>
+Date: Wed, 11 Dec 2019 16:20:03 +0200
+Subject: [PATCH 6/6] xhci: fix USB3 device initiated resume race with roothub
+ autosuspend
+
+commit 057d476fff778f1d3b9f861fdb5437ea1a3cfc99 upstream.
+
+A race in xhci USB3 remote wake handling may force device back to suspend
+after it initiated resume siganaling, causing a missed resume event or warm
+reset of device.
+
+When a USB3 link completes resume signaling and goes to enabled (UO)
+state a interrupt is issued and the interrupt handler will clear the
+bus_state->port_remote_wakeup resume flag, allowing bus suspend.
+
+If the USB3 roothub thread just finished reading port status before
+the interrupt, finding ports still in suspended (U3) state, but hasn't
+yet started suspending the hub, then the xhci interrupt handler will clear
+the flag that prevented roothub suspend and allow bus to suspend, forcing
+all port links back to suspended (U3) state.
+
+Example case:
+usb_runtime_suspend() # because all ports still show suspended U3
+  usb_suspend_both()
+    hub_suspend();   # successful as hub->wakeup_bits not set yet
+==> INTERRUPT
+xhci_irq()
+  handle_port_status()
+    clear bus_state->port_remote_wakeup
+    usb_wakeup_notification()
+      sets hub->wakeup_bits;
+        kick_hub_wq()
+<== END INTERRUPT
+      hcd_bus_suspend()
+        xhci_bus_suspend() # success as port_remote_wakeup bits cleared
+
+Fix this by increasing roothub usage count during port resume to prevent
+roothub autosuspend, and by making sure bus_state->port_remote_wakeup
+flag is only cleared after resume completion is visible, i.e.
+after xhci roothub returned U0 or other non-U3 link state link on a
+get port status request.
+
+Issue rootcaused by Chiasheng Lee
+
+Cc: <stable@vger.kernel.org>
+Cc: Lee, Hou-hsun <hou-hsun.lee@intel.com>
+Reported-by: Lee, Chiasheng <chiasheng.lee@intel.com>
+Signed-off-by: Mathias Nyman <mathias.nyman@linux.intel.com>
+Link: https://lore.kernel.org/r/20191211142007.8847-3-mathias.nyman@linux.intel.com
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Link: https://git.kernel.org/stable/c/d93f4bce1ceaf1b07d378bbfa5406d1d69e3338a
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ drivers/usb/host/xhci-hub.c  | 8 ++++++++
+ drivers/usb/host/xhci-ring.c | 6 +-----
+ drivers/usb/host/xhci.h      | 1 +
+ 3 files changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/usb/host/xhci-hub.c b/drivers/usb/host/xhci-hub.c
+index b68a92338304..a9a65acf23da 100644
+--- a/drivers/usb/host/xhci-hub.c
++++ b/drivers/usb/host/xhci-hub.c
+@@ -764,6 +764,14 @@ static u32 xhci_get_port_status(struct usb_hcd *hcd,
+ 			status |= USB_PORT_STAT_C_BH_RESET << 16;
+ 		if ((raw_port_status & PORT_CEC))
+ 			status |= USB_PORT_STAT_C_CONFIG_ERROR << 16;
++
++		/* USB3 remote wake resume signaling completed */
++		if (bus_state->port_remote_wakeup & (1 << wIndex) &&
++		    (raw_port_status & PORT_PLS_MASK) != XDEV_RESUME &&
++		    (raw_port_status & PORT_PLS_MASK) != XDEV_RECOVERY) {
++			bus_state->port_remote_wakeup &= ~(1 << wIndex);
++			usb_hcd_end_port_resume(&hcd->self, wIndex);
++		}
+ 	}
+ 
+ 	if (hcd->speed < HCD_USB3) {
+diff --git a/drivers/usb/host/xhci-ring.c b/drivers/usb/host/xhci-ring.c
+index fd2bcff0ec57..b5cf5bd1b6d8 100644
+--- a/drivers/usb/host/xhci-ring.c
++++ b/drivers/usb/host/xhci-ring.c
+@@ -1599,9 +1599,6 @@ static void handle_port_status(struct xhci_hcd *xhci,
+ 		usb_hcd_resume_root_hub(hcd);
+ 	}
+ 
+-	if (hcd->speed >= HCD_USB3 && (temp & PORT_PLS_MASK) == XDEV_INACTIVE)
+-		bus_state->port_remote_wakeup &= ~(1 << faked_port_index);
+-
+ 	if ((temp & PORT_PLC) && (temp & PORT_PLS_MASK) == XDEV_RESUME) {
+ 		xhci_dbg(xhci, "port resume event for port %d\n", port_id);
+ 
+@@ -1620,6 +1617,7 @@ static void handle_port_status(struct xhci_hcd *xhci,
+ 			bus_state->port_remote_wakeup |= 1 << faked_port_index;
+ 			xhci_test_and_clear_bit(xhci, port_array,
+ 					faked_port_index, PORT_PLC);
++			usb_hcd_start_port_resume(&hcd->self, faked_port_index);
+ 			xhci_set_link_state(xhci, port_array, faked_port_index,
+ 						XDEV_U0);
+ 			/* Need to wait until the next link state change
+@@ -1657,8 +1655,6 @@ static void handle_port_status(struct xhci_hcd *xhci,
+ 		if (slot_id && xhci->devs[slot_id])
+ 			xhci_ring_device(xhci, slot_id);
+ 		if (bus_state->port_remote_wakeup & (1 << faked_port_index)) {
+-			bus_state->port_remote_wakeup &=
+-				~(1 << faked_port_index);
+ 			xhci_test_and_clear_bit(xhci, port_array,
+ 					faked_port_index, PORT_PLC);
+ 			usb_wakeup_notification(hcd->self.root_hub,
+diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
+index d0c2ad4b1308..6c0cfaa0c6d4 100644
+--- a/drivers/usb/host/xhci.h
++++ b/drivers/usb/host/xhci.h
+@@ -316,6 +316,7 @@ struct xhci_op_regs {
+ #define XDEV_U3		(0x3 << 5)
+ #define XDEV_INACTIVE	(0x6 << 5)
+ #define XDEV_POLLING	(0x7 << 5)
++#define XDEV_RECOVERY	(0x8 << 5)
+ #define XDEV_COMP_MODE  (0xa << 5)
+ #define XDEV_RESUME	(0xf << 5)
+ /* true: port has power (see HCC_PPC) */
+-- 
+2.24.1
+
