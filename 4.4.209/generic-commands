@@ -48,7 +48,11 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    if [[ ${PWD##*/} = "wahoo" ]]; then
+        git rf fs/pstore/ram.c
+        git ap "${PATCHES_FOLDER}"/ram.c.diff || exit ${?}
+    fi
+    git ap "${PATCHES_FOLDER}"/spinlock_debug.c.diff || exit ${?}
 
     header "Committing merge"
     git fm || exit 1

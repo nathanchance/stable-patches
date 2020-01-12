@@ -50,7 +50,11 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    [[  ${PWD} =~ bluecross ]] && { git ap "${PATCHES_FOLDER}"/fault.c.diff || exit ${?}; }
+    if [[  ${PWD##*/} = "bluecross" ]]; then
+        git rf fs/pstore/ram.c
+        git ap "${PATCHES_FOLDER}"/ram.c.diff || exit ${?}
+        git ap "${PATCHES_FOLDER}"/fault.c.diff || exit ${?}
+    fi
     git ap "${PATCHES_FOLDER}"/spinlock_debug.c.diff || exit ${?}
 
     header "Committing merge"
