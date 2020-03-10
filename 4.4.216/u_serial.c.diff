@@ -1,0 +1,16 @@
+diff --git a/drivers/usb/gadget/function/u_serial.c b/drivers/usb/gadget/function/u_serial.c
+index fa674f98e633..d5fcd3e5f02d 100644
+--- a/drivers/usb/gadget/function/u_serial.c
++++ b/drivers/usb/gadget/function/u_serial.c
+@@ -780,8 +780,10 @@ static int gs_start_io(struct gs_port *port)
+ 	if (!port->port_usb)
+ 		return -EIO;
+ 
+-	/* unblock any pending writes into our circular buffer */
+ 	if (started) {
++		gs_start_tx(port);
++		/* Unblock any pending writes into our circular buffer, in case
++		 * we didn't in gs_start_tx() */
+ 		tty_wakeup(port->port.tty);
+ 	} else {
+ 		gs_free_requests(ep, head, &port->read_allocated);
