@@ -1,0 +1,13 @@
+diff --git a/drivers/clk/qcom/clk-rcg2.c b/drivers/clk/qcom/clk-rcg2.c
+index 1d2361b4f10d..80b2e06d973d 100644
+--- a/drivers/clk/qcom/clk-rcg2.c
++++ b/drivers/clk/qcom/clk-rcg2.c
+@@ -129,7 +129,7 @@ static int update_config(struct clk_rcg2 *rcg)
+ 	}
+ 
+ 	WARN(1, "clk: %s: rcg didn't update its configuration.", name);
+-	return 0;
++	return -EBUSY;
+ }
+ 
+ static int clk_rcg2_set_parent(struct clk_hw *hw, u8 index)
