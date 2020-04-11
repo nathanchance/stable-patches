@@ -1,0 +1,25 @@
+diff --git a/drivers/net/phy/micrel.c b/drivers/net/phy/micrel.c
+index a44b004086b7..25460d33c79b 100644
+--- a/drivers/net/phy/micrel.c
++++ b/drivers/net/phy/micrel.c
+@@ -29,6 +29,7 @@
+ #include <linux/micrel_phy.h>
+ #include <linux/of.h>
+ #include <linux/clk.h>
++#include <linux/delay.h>
+ #include <linux/netdevice.h>
+ #include <linux/etherdevice.h>
+ 
+@@ -777,6 +778,12 @@ static int kszphy_resume(struct phy_device *phydev)
+ 
+ 	genphy_resume(phydev);
+ 
++	/* After switching from power-down to normal mode, an internal global
++	 * reset is automatically generated. Wait a minimum of 1 ms before
++	 * read/write access to the PHY registers.
++	 */
++	usleep_range(1000, 2000);
++
+ 	ret = kszphy_config_reset(phydev);
+ 	if (ret)
+ 		return ret;
