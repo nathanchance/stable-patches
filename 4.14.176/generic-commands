@@ -21,6 +21,7 @@ function die() {
 APPROVED_CONFLICTS=( "drivers/clk/qcom/clk-rcg2.c:1"
                      "drivers/gpu/drm/msm/msm_gem.c:2"
                      "drivers/net/phy/micrel.c:1"
+                     "drivers/rpmsg/qcom_glink_smem.c:1"
                      "drivers/usb/dwc3/gadget.c:1"
                      "include/uapi/linux/coresight-stm.h:1" )
 readarray -t CONFLICTS <<< "$(git cf)"
@@ -52,7 +53,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    git ap "${PATCHES_FOLDER}"/gadget.c.diff || exit ${?}
+    git ap "${PATCHES_FOLDER}"/{gadget,qcom_glink_smem}.c.diff || exit ${?}
     grep -q ksz9031_ack_interrupt drivers/net/phy/micrel.c && { git ap "${PATCHES_FOLDER}"/micrel.c.diff || exit ${?}; }
 
     header "Committing merge"

@@ -1,0 +1,20 @@
+diff --git a/drivers/rpmsg/qcom_glink_smem.c b/drivers/rpmsg/qcom_glink_smem.c
+index 8b279dc2a713..f27c610e3faf 100644
+--- a/drivers/rpmsg/qcom_glink_smem.c
++++ b/drivers/rpmsg/qcom_glink_smem.c
+@@ -107,13 +107,11 @@ static void glink_smem_rx_peak(struct qcom_glink_pipe *np,
+ 		tail -= pipe->native.length;
+ 
+ 	len = min_t(size_t, count, pipe->native.length - tail);
+-	if (len) {
++	if (len)
+ 		memcpy_fromio(data, pipe->fifo + tail, len);
+-	}
+ 
+-	if (len != count) {
++	if (len != count)
+ 		memcpy_fromio(data + len, pipe->fifo, (count - len));
+-	}
+ }
+ 
+ static void glink_smem_rx_advance(struct qcom_glink_pipe *np,
