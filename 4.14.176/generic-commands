@@ -19,7 +19,7 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "drivers/clk/qcom/clk-rcg2.c:1"
-                     "drivers/gpu/drm/msm/msm_gem.c:1"
+                     "drivers/gpu/drm/msm/msm_gem.c:2"
                      "drivers/net/phy/micrel.c:1"
                      "drivers/usb/dwc3/gadget.c:1"
                      "include/uapi/linux/coresight-stm.h:1" )
