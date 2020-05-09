@@ -23,7 +23,6 @@ APPROVED_CONFLICTS=( "arch/mips/math-emu/cp1emu.c:1"
                      "drivers/base/firmware_class.c:1"
                      "drivers/mmc/host/sdhci.c:2"
                      "drivers/net/wireless/ath/ath10k/core.c:1"
-                     "drivers/regulator/core.c:2"
                      "drivers/tty/serial/msm_serial.c:1"
                      "net/ipv6/route.c:2" )
 readarray -t CONFLICTS <<< "$(git cf)"
@@ -55,7 +54,6 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    git fp -1 --stdout 6333ef46bbe514a8ece6c432aab6bcf8637b2d7c | git ap || exit ${?}
     git ap "${PATCHES_FOLDER}"/*.diff || exit 1
 
     header "Committing merge"
