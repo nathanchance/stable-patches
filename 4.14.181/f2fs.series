@@ -1,0 +1,303 @@
+From 3cf49d42e62d749ee7dd909ddb3ec085f4f9d843 Mon Sep 17 00:00:00 2001
+From: Jaegeuk Kim <jaegeuk@kernel.org>
+Date: Wed, 26 Dec 2018 19:54:07 -0800
+Subject: [PATCH 1/3] f2fs: sanity check of xattr entry size
+
+There is a security report where f2fs_getxattr() has a hole to expose wrong
+memory region when the image is malformed like this.
+
+f2fs_getxattr: entry->e_name_len: 4, size: 12288, buffer_size: 16384, len: 4
+
+Cc: <stable@vger.kernel.org>
+Signed-off-by: Jaegeuk Kim <jaegeuk@kernel.org>
+Link: https://git.kernel.org/linus/64beba0558fce7b59e9a8a7afd77290e82a22163
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ fs/f2fs/xattr.c | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/fs/f2fs/xattr.c b/fs/f2fs/xattr.c
+index ae2dfa709f5d..1bc7deb6122f 100644
+--- a/fs/f2fs/xattr.c
++++ b/fs/f2fs/xattr.c
+@@ -287,7 +287,7 @@ static int read_xattr_block(struct inode *inode, void *txattr_addr)
+ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
+ 				unsigned int index, unsigned int len,
+ 				const char *name, struct f2fs_xattr_entry **xe,
+-				void **base_addr)
++				void **base_addr, int *base_size)
+ {
+ 	void *cur_addr, *txattr_addr, *last_addr = NULL;
+ 	nid_t xnid = F2FS_I(inode)->i_xattr_nid;
+@@ -298,8 +298,8 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
+ 	if (!size && !inline_size)
+ 		return -ENODATA;
+ 
+-	txattr_addr = f2fs_kzalloc(F2FS_I_SB(inode),
+-			inline_size + size + XATTR_PADDING_SIZE, GFP_NOFS);
++	*base_size = inline_size + size + XATTR_PADDING_SIZE;
++	txattr_addr = f2fs_kzalloc(F2FS_I_SB(inode), *base_size, GFP_NOFS);
+ 	if (!txattr_addr)
+ 		return -ENOMEM;
+ 
+@@ -311,8 +311,10 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
+ 
+ 		*xe = __find_inline_xattr(inode, txattr_addr, &last_addr,
+ 						index, len, name);
+-		if (*xe)
++		if (*xe) {
++			*base_size = inline_size;
+ 			goto check;
++		}
+ 	}
+ 
+ 	/* read from xattr node block */
+@@ -473,6 +475,7 @@ int f2fs_getxattr(struct inode *inode, int index, const char *name,
+ 	int error = 0;
+ 	unsigned int size, len;
+ 	void *base_addr = NULL;
++	int base_size;
+ 
+ 	if (name == NULL)
+ 		return -EINVAL;
+@@ -483,7 +486,7 @@ int f2fs_getxattr(struct inode *inode, int index, const char *name,
+ 
+ 	down_read(&F2FS_I(inode)->i_xattr_sem);
+ 	error = lookup_all_xattrs(inode, ipage, index, len, name,
+-				&entry, &base_addr);
++				&entry, &base_addr, &base_size);
+ 	up_read(&F2FS_I(inode)->i_xattr_sem);
+ 	if (error)
+ 		return error;
+@@ -497,6 +500,11 @@ int f2fs_getxattr(struct inode *inode, int index, const char *name,
+ 
+ 	if (buffer) {
+ 		char *pval = entry->e_name + entry->e_name_len;
++
++		if (base_size - (pval - (char *)base_addr) < size) {
++			error = -ERANGE;
++			goto out;
++		}
+ 		memcpy(buffer, pval, size);
+ 	}
+ 	error = size;
+-- 
+2.26.2
+
+
+From c77e4f0988f9e384514bf1a7e36fab0d7550d4e3 Mon Sep 17 00:00:00 2001
+From: Randall Huang <huangrandall@google.com>
+Date: Thu, 11 Apr 2019 16:26:46 +0800
+Subject: [PATCH 2/3] f2fs: fix to avoid accessing xattr across the boundary
+
+When we traverse xattr entries via __find_xattr(),
+if the raw filesystem content is faked or any hardware failure occurs,
+out-of-bound error can be detected by KASAN.
+Fix the issue by introducing boundary check.
+
+[   38.402878] c7   1827 BUG: KASAN: slab-out-of-bounds in f2fs_getxattr+0x518/0x68c
+[   38.402891] c7   1827 Read of size 4 at addr ffffffc0b6fb35dc by task
+[   38.402935] c7   1827 Call trace:
+[   38.402952] c7   1827 [<ffffff900809003c>] dump_backtrace+0x0/0x6bc
+[   38.402966] c7   1827 [<ffffff9008090030>] show_stack+0x20/0x2c
+[   38.402981] c7   1827 [<ffffff900871ab10>] dump_stack+0xfc/0x140
+[   38.402995] c7   1827 [<ffffff9008325c40>] print_address_description+0x80/0x2d8
+[   38.403009] c7   1827 [<ffffff900832629c>] kasan_report_error+0x198/0x1fc
+[   38.403022] c7   1827 [<ffffff9008326104>] kasan_report_error+0x0/0x1fc
+[   38.403037] c7   1827 [<ffffff9008325000>] __asan_load4+0x1b0/0x1b8
+[   38.403051] c7   1827 [<ffffff90085fcc44>] f2fs_getxattr+0x518/0x68c
+[   38.403066] c7   1827 [<ffffff90085fc508>] f2fs_xattr_generic_get+0xb0/0xd0
+[   38.403080] c7   1827 [<ffffff9008395708>] __vfs_getxattr+0x1f4/0x1fc
+[   38.403096] c7   1827 [<ffffff9008621bd0>] inode_doinit_with_dentry+0x360/0x938
+[   38.403109] c7   1827 [<ffffff900862d6cc>] selinux_d_instantiate+0x2c/0x38
+[   38.403123] c7   1827 [<ffffff900861b018>] security_d_instantiate+0x68/0x98
+[   38.403136] c7   1827 [<ffffff9008377db8>] d_splice_alias+0x58/0x348
+[   38.403149] c7   1827 [<ffffff900858d16c>] f2fs_lookup+0x608/0x774
+[   38.403163] c7   1827 [<ffffff900835eacc>] lookup_slow+0x1e0/0x2cc
+[   38.403177] c7   1827 [<ffffff9008367fe0>] walk_component+0x160/0x520
+[   38.403190] c7   1827 [<ffffff9008369ef4>] path_lookupat+0x110/0x2b4
+[   38.403203] c7   1827 [<ffffff900835dd38>] filename_lookup+0x1d8/0x3a8
+[   38.403216] c7   1827 [<ffffff900835eeb0>] user_path_at_empty+0x54/0x68
+[   38.403229] c7   1827 [<ffffff9008395f44>] SyS_getxattr+0xb4/0x18c
+[   38.403241] c7   1827 [<ffffff9008084200>] el0_svc_naked+0x34/0x38
+
+Signed-off-by: Randall Huang <huangrandall@google.com>
+[Jaegeuk Kim: Fix wrong ending boundary]
+Reviewed-by: Chao Yu <yuchao0@huawei.com>
+Signed-off-by: Jaegeuk Kim <jaegeuk@kernel.org>
+Link: https://git.kernel.org/linus/2777e654371dd4207a3a7f4fb5fa39550053a080
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ fs/f2fs/xattr.c | 36 +++++++++++++++++++++++++++---------
+ fs/f2fs/xattr.h |  2 ++
+ 2 files changed, 29 insertions(+), 9 deletions(-)
+
+diff --git a/fs/f2fs/xattr.c b/fs/f2fs/xattr.c
+index 1bc7deb6122f..bd43630c9970 100644
+--- a/fs/f2fs/xattr.c
++++ b/fs/f2fs/xattr.c
+@@ -201,12 +201,17 @@ static inline const struct xattr_handler *f2fs_xattr_handler(int index)
+ 	return handler;
+ }
+ 
+-static struct f2fs_xattr_entry *__find_xattr(void *base_addr, int index,
+-					size_t len, const char *name)
++static struct f2fs_xattr_entry *__find_xattr(void *base_addr,
++				void *last_base_addr, int index,
++				size_t len, const char *name)
+ {
+ 	struct f2fs_xattr_entry *entry;
+ 
+ 	list_for_each_xattr(entry, base_addr) {
++		if ((void *)(entry) + sizeof(__u32) > last_base_addr ||
++			(void *)XATTR_NEXT_ENTRY(entry) > last_base_addr)
++			return NULL;
++
+ 		if (entry->e_name_index != index)
+ 			continue;
+ 		if (entry->e_name_len != len)
+@@ -289,20 +294,22 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
+ 				const char *name, struct f2fs_xattr_entry **xe,
+ 				void **base_addr, int *base_size)
+ {
+-	void *cur_addr, *txattr_addr, *last_addr = NULL;
++	void *cur_addr, *txattr_addr, *last_txattr_addr;
++	void *last_addr = NULL;
+ 	nid_t xnid = F2FS_I(inode)->i_xattr_nid;
+-	unsigned int size = xnid ? VALID_XATTR_BLOCK_SIZE : 0;
+ 	unsigned int inline_size = inline_xattr_size(inode);
+ 	int err = 0;
+ 
+-	if (!size && !inline_size)
++	if (!xnid && !inline_size)
+ 		return -ENODATA;
+ 
+-	*base_size = inline_size + size + XATTR_PADDING_SIZE;
++	*base_size = XATTR_SIZE(xnid, inode) + XATTR_PADDING_SIZE;
+ 	txattr_addr = f2fs_kzalloc(F2FS_I_SB(inode), *base_size, GFP_NOFS);
+ 	if (!txattr_addr)
+ 		return -ENOMEM;
+ 
++	last_txattr_addr = (void *)txattr_addr + XATTR_SIZE(xnid, inode);
++
+ 	/* read from inline xattr */
+ 	if (inline_size) {
+ 		err = read_inline_xattr(inode, ipage, txattr_addr);
+@@ -329,7 +336,11 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
+ 	else
+ 		cur_addr = txattr_addr;
+ 
+-	*xe = __find_xattr(cur_addr, index, len, name);
++	*xe = __find_xattr(cur_addr, last_txattr_addr, index, len, name);
++	if (!*xe) {
++		err = -EFAULT;
++		goto out;
++	}
+ check:
+ 	if (IS_XATTR_LAST_ENTRY(*xe)) {
+ 		err = -ENODATA;
+@@ -573,7 +584,8 @@ static int __f2fs_setxattr(struct inode *inode, int index,
+ 			struct page *ipage, int flags)
+ {
+ 	struct f2fs_xattr_entry *here, *last;
+-	void *base_addr;
++	void *base_addr, *last_base_addr;
++	nid_t xnid = F2FS_I(inode)->i_xattr_nid;
+ 	int found, newsize;
+ 	size_t len;
+ 	__u32 new_hsize;
+@@ -597,8 +609,14 @@ static int __f2fs_setxattr(struct inode *inode, int index,
+ 	if (error)
+ 		return error;
+ 
++	last_base_addr = (void *)base_addr + XATTR_SIZE(xnid, inode);
++
+ 	/* find entry with wanted name. */
+-	here = __find_xattr(base_addr, index, len, name);
++	here = __find_xattr(base_addr, last_base_addr, index, len, name);
++	if (!here) {
++		error = -EFAULT;
++		goto exit;
++	}
+ 
+ 	found = IS_XATTR_LAST_ENTRY(here) ? 0 : 1;
+ 
+diff --git a/fs/f2fs/xattr.h b/fs/f2fs/xattr.h
+index dbcd1d16e669..2a4ecaf338ea 100644
+--- a/fs/f2fs/xattr.h
++++ b/fs/f2fs/xattr.h
+@@ -74,6 +74,8 @@ struct f2fs_xattr_entry {
+ 				entry = XATTR_NEXT_ENTRY(entry))
+ #define VALID_XATTR_BLOCK_SIZE	(PAGE_SIZE - sizeof(struct node_footer))
+ #define XATTR_PADDING_SIZE	(sizeof(__u32))
++#define XATTR_SIZE(x,i)		(((x) ? VALID_XATTR_BLOCK_SIZE : 0) +	\
++						(inline_xattr_size(i)))
+ #define MIN_OFFSET(i)		XATTR_ALIGN(inline_xattr_size(i) +	\
+ 						VALID_XATTR_BLOCK_SIZE)
+ 
+-- 
+2.26.2
+
+
+From 74bf35eb911d33a42db929d06114ef4e45dfc10a Mon Sep 17 00:00:00 2001
+From: Randall Huang <huangrandall@google.com>
+Date: Fri, 18 Oct 2019 14:56:22 +0800
+Subject: [PATCH 3/3] f2fs: fix to avoid memory leakage in f2fs_listxattr
+
+In f2fs_listxattr, there is no boundary check before
+memcpy e_name to buffer.
+If the e_name_len is corrupted,
+unexpected memory contents may be returned to the buffer.
+
+Signed-off-by: Randall Huang <huangrandall@google.com>
+Reviewed-by: Chao Yu <yuchao0@huawei.com>
+Signed-off-by: Jaegeuk Kim <jaegeuk@kernel.org>
+Link: https://git.kernel.org/linus/688078e7f36c293dae25b338ddc9e0a2790f6e06
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ fs/f2fs/xattr.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/fs/f2fs/xattr.c b/fs/f2fs/xattr.c
+index bd43630c9970..f0ba0d604641 100644
+--- a/fs/f2fs/xattr.c
++++ b/fs/f2fs/xattr.c
+@@ -527,8 +527,9 @@ int f2fs_getxattr(struct inode *inode, int index, const char *name,
+ ssize_t f2fs_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
+ {
+ 	struct inode *inode = d_inode(dentry);
++	nid_t xnid = F2FS_I(inode)->i_xattr_nid;
+ 	struct f2fs_xattr_entry *entry;
+-	void *base_addr;
++	void *base_addr, *last_base_addr;
+ 	int error = 0;
+ 	size_t rest = buffer_size;
+ 
+@@ -538,6 +539,8 @@ ssize_t f2fs_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
+ 	if (error)
+ 		return error;
+ 
++	last_base_addr = (void *)base_addr + XATTR_SIZE(xnid, inode);
++
+ 	list_for_each_xattr(entry, base_addr) {
+ 		const struct xattr_handler *handler =
+ 			f2fs_xattr_handler(entry->e_name_index);
+@@ -545,6 +548,15 @@ ssize_t f2fs_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
+ 		size_t prefix_len;
+ 		size_t size;
+ 
++		if ((void *)(entry) + sizeof(__u32) > last_base_addr ||
++			(void *)XATTR_NEXT_ENTRY(entry) > last_base_addr) {
++			f2fs_err(F2FS_I_SB(inode), "inode (%lu) has corrupted xattr",
++						inode->i_ino);
++			set_sbi_flag(F2FS_I_SB(inode), SBI_NEED_FSCK);
++			error = -EFSCORRUPTED;
++			goto cleanup;
++		}
++
+ 		if (!handler || (handler->list && !handler->list(dentry)))
+ 			continue;
+ 
+-- 
+2.26.2
+
