@@ -18,7 +18,9 @@ function die() {
     exit 1
 }
 
-APPROVED_CONFLICTS=( "kernel/trace/blktrace.c:5" )
+APPROVED_CONFLICTS=( "fs/exec.c:1"
+                     "kernel/trace/blktrace.c:5"
+                     "sound/core/rawmidi.c:2" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -48,7 +50,9 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
 
     header "Applying all patches"
-    git ap "${PATCHES_FOLDER}"/*.diff || exit 1
+    git ch MERGE_HEAD -- include/sound/rawmidi.h sound/core/rawmidi.c
+    git ap "${PATCHES_FOLDER}"/blktrace.c.diff || exit ${?}
+    grep -q "is_su = d_is_su" fs/exec.c && { git ap "${PATCHES_FOLDER}"/exec.c.diff || exit ${?}; }
 
     header "Committing merge"
     git fm || exit 1
