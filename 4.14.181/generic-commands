@@ -19,7 +19,8 @@ function die() {
 }
 
 APPROVED_CONFLICTS=( "drivers/net/ethernet/stmicro/stmmac/stmmac.h:1"
-                     "fs/f2fs/xattr.c:5" )
+                     "fs/f2fs/xattr.c:5"
+                     "sound/core/rawmidi.c:2" )
 readarray -t CONFLICTS <<< "$(git cf)"
 if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Resetting all conflicts"
@@ -51,6 +52,7 @@ if [[ -n "${CONFLICTS[*]}" ]]; then
     header "Applying all patches"
     git ap "${PATCHES_FOLDER}"/f2fs.series || exit 1
     grep -q f2fs_err fs/f2fs/f2fs.h || { git ap "${PATCHES_FOLDER}"/f2fs_msg.diff || exit ${?}; }
+    git ch MERGE_HEAD -- include/sound/rawmidi.h sound/core/rawmidi.c
 
     header "Committing merge"
     git fm || exit 1
