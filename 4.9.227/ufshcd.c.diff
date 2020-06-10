@@ -1,0 +1,12 @@
+diff --git a/drivers/scsi/ufs/ufshcd.c b/drivers/scsi/ufs/ufshcd.c
+index b9bfce525e01..534039c2459c 100755
+--- a/drivers/scsi/ufs/ufshcd.c
++++ b/drivers/scsi/ufs/ufshcd.c
+@@ -3218,6 +3218,7 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
+ 
+ 	err = ufshcd_map_sg(hba, lrbp);
+ 	if (err) {
++		ufshcd_release(hba, false);
+ 		lrbp->cmd = NULL;
+ 		clear_bit_unlock(tag, &hba->lrb_in_use);
+ 		ufshcd_release_all(hba);
