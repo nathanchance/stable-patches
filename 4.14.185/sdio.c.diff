@@ -1,0 +1,15 @@
+diff --git a/drivers/mmc/core/sdio.c b/drivers/mmc/core/sdio.c
+index 0e82bc031821..87987d40943b 100644
+--- a/drivers/mmc/core/sdio.c
++++ b/drivers/mmc/core/sdio.c
+@@ -803,9 +803,8 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
+ 				/* Retry init sequence, but without R4_18V_PRESENT. */
+ 				retries = 0;
+ 				goto try_again;
+-			} else {
+-				goto remove;
+ 			}
++			return err;
+ 		}
+ #ifdef CONFIG_MMC_EMBEDDED_SDIO
+ 	}
