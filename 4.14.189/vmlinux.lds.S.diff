@@ -1,0 +1,14 @@
+diff --git a/arch/arm64/kernel/vmlinux.lds.S b/arch/arm64/kernel/vmlinux.lds.S
+index fc981a878a6e..b638a9c259cd 100644
+--- a/arch/arm64/kernel/vmlinux.lds.S
++++ b/arch/arm64/kernel/vmlinux.lds.S
+@@ -160,9 +160,6 @@ SECTIONS
+ 		KEEP(*(.altinstructions))
+ 		__alt_instructions_end = .;
+ 	}
+-	.altinstr_replacement : {
+-		KEEP(*(.altinstr_replacement))
+-	}
+ 
+ 	. = ALIGN(PAGE_SIZE);
+ 	__inittext_end = .;
