@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=(
+    "drivers/usb/gadget/function/f_uac1.c:1" # Apply upstream patch
+    "drivers/usb/host/xhci-plat.c:1" # Discard because we did not integrate the reverted commit in the first place
+    "net/netlink/genetlink.c:1" # Work around https://source.codeaurora.org/quic/la/kernel/msm-4.4/commit/?id=6d2650831d1b16fce3140d9ce6216149afce4e36
+    "sound/core/compress_offload.c:1" # Discard and prefer https://source.codeaurora.org/quic/la/kernel/msm-4.4/commit/?id=5200617101d49f83ca20a3cb5ef336fa76b000e1
+)
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    git fp -1 --stdout 6d2650831d1b16fce3 | git ap -R || exit ${?}
+    git diff v4.4.230..MERGE_HEAD net/netlink/genetlink.c | git ap || exit ${?}
+    if [[ -f drivers/usb/gadget/function/f_uac1_legacy.c ]]; then
+        git fp -1 --stdout 8778eb0927ddcd3f431805c37b78fa56481aeed9 | git ap || exit ${?}
+    fi
+
+    header "Committing merge"
+    git fm || exit 1
+fi
