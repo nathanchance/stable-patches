@@ -1,0 +1,84 @@
+From 37460923afd18804128bd77cfa7018d8a6ceea81 Mon Sep 17 00:00:00 2001
+From: Jaegeuk Kim <jaegeuk@kernel.org>
+Date: Wed, 14 Nov 2018 12:40:30 -0800
+Subject: [PATCH 1/2] f2fs: check memory boundary by insane namelen
+
+If namelen is corrupted to have very long value, fill_dentries can copy
+wrong memory area.
+
+Reviewed-by: Chao Yu <yuchao0@huawei.com>
+Signed-off-by: Jaegeuk Kim <jaegeuk@kernel.org>
+(cherry picked from commit 4e240d1bab1ead280ddf5eb05058dba6bbd57d10)
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ fs/f2fs/dir.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/fs/f2fs/dir.c b/fs/f2fs/dir.c
+index 6f35462b049a..aa3d0d75b3f6 100644
+--- a/fs/f2fs/dir.c
++++ b/fs/f2fs/dir.c
+@@ -812,6 +812,16 @@ int f2fs_fill_dentries(struct dir_context *ctx, struct f2fs_dentry_ptr *d,
+ 		de_name.name = d->filename[bit_pos];
+ 		de_name.len = le16_to_cpu(de->name_len);
+ 
++		/* check memory boundary before moving forward */
++		bit_pos += GET_DENTRY_SLOTS(le16_to_cpu(de->name_len));
++		if (unlikely(bit_pos > d->max)) {
++			f2fs_msg(sbi->sb, KERN_WARNING,
++				"%s: corrupted namelen=%d, run fsck to fix.",
++				__func__, le16_to_cpu(de->name_len));
++			set_sbi_flag(sbi, SBI_NEED_FSCK);
++			return -EINVAL;
++		}
++
+ 		if (f2fs_encrypted_inode(d->inode)) {
+ 			int save_len = fstr->len;
+ 			int err;
+@@ -833,7 +843,6 @@ int f2fs_fill_dentries(struct dir_context *ctx, struct f2fs_dentry_ptr *d,
+ 		if (sbi->readdir_ra == 1)
+ 			ra_node_page(sbi, le32_to_cpu(de->ino));
+ 
+-		bit_pos += GET_DENTRY_SLOTS(le16_to_cpu(de->name_len));
+ 		ctx->pos = start_pos + bit_pos;
+ 	}
+ 	return 0;
+-- 
+2.28.0
+
+
+From 18eea9a7876ff34b2b0550820d8587d5b1272ec3 Mon Sep 17 00:00:00 2001
+From: Sheng Yong <shengyong1@huawei.com>
+Date: Mon, 7 Jan 2019 15:02:34 +0800
+Subject: [PATCH 2/2] f2fs: check if file namelen exceeds max value
+
+Dentry bitmap is not enough to detect incorrect dentries. So this patch
+also checks the namelen value of a dentry.
+
+Signed-off-by: Gong Chen <gongchen4@huawei.com>
+Signed-off-by: Sheng Yong <shengyong1@huawei.com>
+Reviewed-by: Chao Yu <yuchao0@huawei.com>
+Signed-off-by: Jaegeuk Kim <jaegeuk@kernel.org>
+(cherry picked from commit 720db068634c91553a8e1d9a0fcd8c7050e06d2b)
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+---
+ fs/f2fs/dir.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/fs/f2fs/dir.c b/fs/f2fs/dir.c
+index aa3d0d75b3f6..1dfc02dd4cdd 100644
+--- a/fs/f2fs/dir.c
++++ b/fs/f2fs/dir.c
+@@ -814,7 +814,8 @@ int f2fs_fill_dentries(struct dir_context *ctx, struct f2fs_dentry_ptr *d,
+ 
+ 		/* check memory boundary before moving forward */
+ 		bit_pos += GET_DENTRY_SLOTS(le16_to_cpu(de->name_len));
+-		if (unlikely(bit_pos > d->max)) {
++		if (unlikely(bit_pos > d->max ||
++				le16_to_cpu(de->name_len) > F2FS_NAME_LEN)) {
+ 			f2fs_msg(sbi->sb, KERN_WARNING,
+ 				"%s: corrupted namelen=%d, run fsck to fix.",
+ 				__func__, le16_to_cpu(de->name_len));
+-- 
+2.28.0
+
