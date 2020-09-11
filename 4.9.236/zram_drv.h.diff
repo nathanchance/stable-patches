@@ -1,0 +1,12 @@
+diff --git a/drivers/block/zram/zram_drv.h b/drivers/block/zram/zram_drv.h
+index 29af8d024b47..f2fd46daa760 100644
+--- a/drivers/block/zram/zram_drv.h
++++ b/drivers/block/zram/zram_drv.h
+@@ -21,7 +21,6 @@
+ 
+ #include "zcomp.h"
+ 
+-#define SECTOR_SHIFT		9
+ #define SECTORS_PER_PAGE_SHIFT	(PAGE_SHIFT - SECTOR_SHIFT)
+ #define SECTORS_PER_PAGE	(1 << SECTORS_PER_PAGE_SHIFT)
+ #define ZRAM_LOGICAL_BLOCK_SHIFT 12
