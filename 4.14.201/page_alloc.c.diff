@@ -1,0 +1,21 @@
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+index 3093d0630b8e..b6ee1389fed9 100644
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -68,6 +68,7 @@
+ #include <linux/ftrace.h>
+ #include <linux/lockdep.h>
+ #include <linux/nmi.h>
++#include <linux/khugepaged.h>
+ #include <linux/psi.h>
+ 
+ #include <asm/sections.h>
+@@ -7177,6 +7178,8 @@ int __meminit init_per_zone_wmark_min(void)
+ 	setup_min_slab_ratio();
+ #endif
+ 
++	khugepaged_min_free_kbytes_update();
++
+ 	return 0;
+ }
+ postcore_initcall(init_per_zone_wmark_min)
