@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=(
+    "drivers/usb/dwc3/core.c:2"
+    "fs/crypto/policy.c:3"
+    "fs/ext4/ext4.h:1"
+    "fs/ext4/ioctl.c:1"
+    "fs/ext4/namei.c:1"
+    "fs/f2fs/f2fs.h:1"
+    "fs/f2fs/file.c:1"
+    "fs/f2fs/namei.c:1"
+    "include/linux/fscrypto.h:1:rm"
+    "init/Kconfig:1"
+)
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    if grep -q "default 18" init/Kconfig; then
+        cat <<'EOF' | git ap || exit ${?}
+diff --git a/init/Kconfig b/init/Kconfig
+index 39e7d9f5f790..2cee47b725dc 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -862,7 +862,8 @@ config IKCONFIG_PROC
+ 
+ config LOG_BUF_SHIFT
+ 	int "Kernel log buffer size (16 => 64KB, 17 => 128KB)"
+-	range 12 25
++	range 12 25 if !H8300
++	range 12 19 if H8300
+ 	default 18
+ 	depends on PRINTK
+ 	help
+EOF
+    fi
+
+    header "Committing merge"
+    git fm || exit 1
+fi
