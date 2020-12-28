@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+PATCHES_FOLDER=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+[[ "$(pwd)" =~ flash ]] && FLASH=true
+
+function header() {
+    echo -e "\033[01;31m"
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "==  ${1}  =="
+    echo -e "====$(for i in $(seq ${#1}); do echo -e "=\c"; done)===="
+    echo -e "\033[0m"
+}
+
+function die() {
+    echo -e "\033[01;31m"
+    echo "${@}"
+    echo -e "\033[0m"
+    exit 1
+}
+
+APPROVED_CONFLICTS=(
+    "drivers/scsi/ufs/ufshcd.c:1"
+    "drivers/soc/qcom/smp2p.c:1"
+    "drivers/usb/gadget/function/f_fs.c:1"
+)
+readarray -t CONFLICTS <<< "$(git cf)"
+if [[ -n "${CONFLICTS[*]}" ]]; then
+    header "Resetting all conflicts"
+    for CONFLICT in "${CONFLICTS[@]}"; do
+        FOUND=false
+        for APPROVED_CONFLICT in "${APPROVED_CONFLICTS[@]}"; do
+            ACTION=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 3)
+            NOC=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 2)
+            APPROVED_CONFLICT=$(echo "${APPROVED_CONFLICT}" | cut -d : -f 1)
+            [[ -z ${ACTION} ]] && ACTION=rf
+            [[ ${CONFLICT} = ${APPROVED_CONFLICT} ]] && { FOUND=true; break; }
+        done
+        [[ ${NOC} -ne $(git lo HEAD..MERGE_HEAD "${CONFLICT}" | wc -l) ]] && die "${CONFLICT} resolution might be outdated!"
+        if ${FOUND}; then
+            case ${ACTION} in
+                "rf") ACTION_STRING="Resetting" ;;
+                "rm"*) ACTION_STRING="Removing" ;;
+                *) die "Invalid action: ${ACTION}" ;;
+            esac
+
+            echo "${ACTION_STRING} ${CONFLICT}..."
+            git "${ACTION}" "${CONFLICT}" &>/dev/null
+        else
+            die "${CONFLICT} not accounted for, bailing out!"
+        fi
+    done
+    [[ -n "$(git cf)" ]] && die "Resetting conflicts failed!"
+
+    header "Applying all patches"
+    cat <<'EOF' | git ap || exit ${?}
+diff --git a/drivers/soc/qcom/smp2p.c b/drivers/soc/qcom/smp2p.c
+index 788d16f59a63..c21b7ab9eca6 100644
+--- a/drivers/soc/qcom/smp2p.c
++++ b/drivers/soc/qcom/smp2p.c
+@@ -435,15 +435,16 @@ static int qcom_smp2p_inbound_entry(struct qcom_smp2p *smp2p,
+ static int smp2p_update_bits(void *data, u32 mask, u32 value)
+ {
+ 	struct smp2p_entry *entry = data;
++	unsigned long flags;
+ 	u32 orig;
+ 	u32 val;
+ 
+-	spin_lock(&entry->lock);
++	spin_lock_irqsave(&entry->lock, flags);
+ 	val = orig = readl(entry->value);
+ 	val &= ~mask;
+ 	val |= value;
+ 	writel(val, entry->value);
+-	spin_unlock(&entry->lock);
++	spin_unlock_irqrestore(&entry->lock, flags);
+ 	SMP2P_INFO("%d: %s: orig:0x%0x new:0x%0x\n",
+ 		   entry->smp2p->remote_pid, entry->name, orig, val);
+ 
+EOF
+    if grep -q "case USB_SPEED_SUPER_PLUS" drivers/usb/gadget/function/f_fs.c; then
+        cat <<'EOF' | git ap || exit ${?}
+diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
+index 139c76a44503..f6a522163471 100644
+--- a/drivers/usb/gadget/function/f_fs.c
++++ b/drivers/usb/gadget/function/f_fs.c
+@@ -1396,8 +1396,8 @@ static long ffs_epfile_ioctl(struct file *file, unsigned code,
+ 		struct usb_endpoint_descriptor desc1, *desc;
+ 
+ 		switch (epfile->ffs->gadget->speed) {
+-		case USB_SPEED_SUPER_PLUS:
+ 		case USB_SPEED_SUPER:
++		case USB_SPEED_SUPER_PLUS:
+ 			desc_idx = 2;
+ 			break;
+ 		case USB_SPEED_HIGH:
+EOF
+    fi
+    cat <<'EOF' | git ap || exit ${?}
+diff --git a/drivers/usb/gadget/function/f_fs.c b/drivers/usb/gadget/function/f_fs.c
+index 139c76a44503..816c3c4b6872 100644
+--- a/drivers/usb/gadget/function/f_fs.c
++++ b/drivers/usb/gadget/function/f_fs.c
+@@ -3338,7 +3338,8 @@ static int _ffs_func_bind(struct usb_configuration *c,
+ 	}
+ 
+ 	if (likely(super)) {
+-		func->function.ss_descriptors = vla_ptr(vlabuf, d, ss_descs);
++		func->function.ss_descriptors = func->function.ssp_descriptors =
++			vla_ptr(vlabuf, d, ss_descs);
+ 		ss_len = ffs_do_descs(ffs, ffs->ss_descs_count,
+ 				vla_ptr(vlabuf, d, raw_descs) + fs_len + hs_len,
+ 				d_raw_descs__sz - fs_len - hs_len,
+EOF
+
+    header "Committing merge"
+    git fm || exit 1
+fi
